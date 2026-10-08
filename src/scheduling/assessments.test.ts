@@ -12,7 +12,7 @@ import { AssessmentOption } from "./types";
 
 const NOW = new Date("2024-08-19T00:00:00.000Z");
 
-/** Flattens options into the README's (session 1, session 2) tuple format. */
+/** Flattens options into the instruction doc's (session 1, session 2) tuple format. */
 function toPairs(options: AssessmentOption[]): [string, string][] {
   return options.flatMap(({ firstSession, secondSessionOptions }) =>
     secondSessionOptions.map((second): [string, string] => [

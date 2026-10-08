@@ -3,13 +3,36 @@ import { clinician as starterJaneDoe } from "../starter-code/mock-clinician";
 import { MOCK_SLOT_DATA } from "../starter-code/mock-slot-data";
 import { buildClinician } from "./factories";
 
-/** Dr. Doe from the starter code, with the real slots from slots.json. */
+/** 
+ * Dr. Doe from the starter code, with the real slots from slots.json. 
+ * Large set of slots data -> produces total of 37,165 session pairs (before optimization task)
+*/
 export const janeDoe: Clinician = buildClinician({
   ...starterJaneDoe,
   slots: MOCK_SLOT_DATA,
 });
 
-/** Eligible for Byrne (NY + Aetna): shows results grouped by clinician. */
+/** Small example data set from the instructions document */
+export const jonSnow: Clinician = buildClinician({
+  id: "clinician-jon-snow", 
+  firstName: "Jon",
+  lastName: "Snow",
+  states: ["MD"],
+  insurances: ["AETNA", "UNITED"],
+  clinicianType: "PSYCHOLOGIST",
+  maxDailyAppointments: 3,
+  maxWeeklyAppointments: 9,
+  slots: [
+    { date: "2024-08-19T12:00:00.000Z", length: 90 },
+    { date: "2024-08-19T12:15:00.000Z", length: 90 },
+    { date: "2024-08-21T12:00:00.000Z", length: 90 },
+    { date: "2024-08-21T15:00:00.000Z", length: 90 },
+    { date: "2024-08-22T15:00:00.000Z", length: 90 },
+    { date: "2024-08-28T12:15:00.000Z", length: 90 },
+  ],
+});
+
+/** Eligible for Byrne (NY + Aetna). */
 export const alexRivera: Clinician = buildClinician({
   id: "clinician-alex-rivera",
   firstName: "Alex",
@@ -76,6 +99,7 @@ export const taylorKim: Clinician = buildClinician({
 
 export const MOCK_CLINICIANS: Clinician[] = [
   janeDoe,
+  jonSnow,
   alexRivera,
   samPatel,
   morganLee,

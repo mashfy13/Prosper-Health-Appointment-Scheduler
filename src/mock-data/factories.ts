@@ -3,14 +3,14 @@ import { Clinician } from "../starter-code/clinician";
 
 const MOCK_TIMESTAMP = new Date("2024-08-15T14:45:15.462Z");
 
-/** Slot ids are derived from clinician + start time, so they're stable and unique. */
+/** Slot ids are derived from clinician + start time + length, so they're stable and unique. */
 export function buildSlot(
   clinicianId: string,
   isoDate: string,
   length: number,
 ): AvailableAppointmentSlot {
   return {
-    id: `${clinicianId}-${isoDate}`,
+    id: `${clinicianId}-${isoDate}-${length}`,
     clinicianId,
     date: new Date(isoDate),
     length,

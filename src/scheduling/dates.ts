@@ -1,13 +1,8 @@
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
- * Whole days since the Unix epoch, in UTC. Two dates on the same UTC calendar
- * day share a day number.
- *
- * All "which day is this?" logic goes through this helper. We use UTC because
- * neither `Clinician` nor `Patient` has a timezone today. To switch to
- * clinician-local days, this (plus a timezone on `Clinician`) is the place to
- * change. See DECISIONS.md D2.
+ * Helper to get a representation of a date as a number of days
+ * Used to help determine number of days between to dates in `calendarDaysBeteen`
  */
 export function utcDayNumber(date: Date): number {
   return Math.floor(date.getTime() / MS_PER_DAY);

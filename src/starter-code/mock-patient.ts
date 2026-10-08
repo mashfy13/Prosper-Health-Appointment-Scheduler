@@ -9,3 +9,13 @@ export const patient: Patient = {
   createdAt: new Date(),
   updatedAt: new Date(),
 };
+
+export const patient2: Patient = {
+  id: "patient-2",
+  firstName: "Harry",
+  lastName: "Potter",
+  state: "MD",
+  insurance: "UNITED",
+  createdAt: new Date(),
+  updatedAt: new Date(),
+}
