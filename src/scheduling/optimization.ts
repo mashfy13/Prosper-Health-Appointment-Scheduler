@@ -4,9 +4,14 @@ import { utcDayNumber } from "./dates";
 const MS_PER_MINUTE = 60 * 1000;
 
 /**
- * Most non-overlapping appointments that fit, given start times sorted
- * ascending. Greedy: take each start at or after the last taken one ends.
- * This is optimal because all appointments are the same length.
+ * For a full list of sorted start times, return the most non-overlapping 
+ * times that fit given the duration. 
+ * 
+ * `end = start + duration`. 
+ * 
+ * Algorithm: take each start at or after the last one ends. 
+ * 
+ * Assumption here is that all slots are of the same length. 
  */
 function countMaxAppointments(
   sortedStartTimes: number[],
@@ -67,8 +72,11 @@ export function maximizeAppointmentDates(
 /**
  * Task 2 Entry Point
  * 
- * Applies `maximizeAppointmentDates` to each UTC day of a clinician's slots.
- * Returns the original slot objects in their original order.
+ * Applies `maximizeAppointmentDates` to each UTC day of a clinician's slots
+ * to get all bookable slots that wouldn't reduce the maxnimum number slots
+ * if booked. 
+ * 
+ * Filters the original slots down to the slots in that "maximum" set. 
  */
 export function optimizeSlots(
   slots: AvailableAppointmentSlot[],
