@@ -132,6 +132,8 @@ End-to-end tests run the instructions' examples, plus mock clinicians that each 
 | Jon Snow                   | The instructions' 6-slot example; in Task 3, a weekly cap that only allows pairs across weeks |
 | Arya Stark                 | Task 2 removals; in Task 3, overlapping and back-to-back appointments                         |
 | Ron Weasley, Percy Jackson | Task 2 removals; in Task 3, daily caps that let every slot through again                      |
+| Hermione Granger           | In Task 3, a fully booked day is removed                                                      |
+| Neville Longbottom         | In Task 3, a fully booked week is removed                                                     |
 | Others                     | Excluded for state, insurance or clinician type                                               |
 
 ## Performance

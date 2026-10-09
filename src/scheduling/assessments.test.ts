@@ -2,8 +2,10 @@ import { buildClinician, buildSlot } from "../mock-data/factories";
 import {
   MOCK_CLINICIANS,
   aryaStark,
+  jeanGrey,
   janeDoe,
   jonSnow,
+  peterParker,
   percyJackson,
   ronWeasley,
 } from "../mock-data/clinicians";
@@ -311,6 +313,39 @@ describe("findAvailableAssessmentOptions", () => {
         [percyJackson.id, 22],
       ]);
     });
+  });
+
+  it("Hermione Granger: a fully booked day's slots are removed", () => {
+    expect(
+      findAssessmentOptions(patient2, [jeanGrey], NOW).flatMap(
+        (result) => toPairs(result.options),
+      ),
+    ).toHaveLength(3);
+    expect(
+      findAvailableAssessmentOptions(patient2, [jeanGrey], NOW).flatMap(
+        (result) => toPairs(result.options),
+      ),
+    ).toEqual([["2024-08-20T12:00:00.000Z", "2024-08-22T12:00:00.000Z"]]);
+  });
+
+  it("Neville Longbottom: a fully booked week's slots are removed", () => {
+    expect(
+      findAssessmentOptions(patient2, [peterParker], NOW).flatMap(
+        (result) => toPairs(result.options),
+      ),
+    ).toHaveLength(6);
+    // The next week has room for both sessions, so same-week pairs are kept.
+    expect(
+      findAvailableAssessmentOptions(
+        patient2,
+        [peterParker],
+        NOW,
+      ).flatMap((result) => toPairs(result.options)),
+    ).toEqual([
+      ["2024-08-26T12:00:00.000Z", "2024-08-27T12:00:00.000Z"],
+      ["2024-08-26T12:00:00.000Z", "2024-08-28T12:00:00.000Z"],
+      ["2024-08-27T12:00:00.000Z", "2024-08-28T12:00:00.000Z"],
+    ]);
   });
 
   it("only offers pairs that Task 1 also offers", () => {
