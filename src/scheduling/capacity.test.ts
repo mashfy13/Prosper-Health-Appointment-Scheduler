@@ -3,11 +3,16 @@ import {
   buildClinician,
   buildSlot,
 } from "../mock-data/factories";
+import { Clinician } from "../starter-code/clinician";
 import {
   AppointmentStatus,
   AppointmentType,
 } from "../starter-code/appointment";
-import { getRemainingCapacity, removeConflictingSlots } from "./capacity";
+import {
+  getRelevantAppointments,
+  getRemainingCapacity,
+  removeConflictingSlots,
+} from "./capacity";
 
 const appointment = (
   isoDate: string,
@@ -35,12 +40,15 @@ function psychologistWith(
   });
 }
 
+const capacityOf = (clinician: Clinician) =>
+  getRemainingCapacity(clinician, clinician.appointments);
+
 describe("getRemainingCapacity", () => {
   // Week of Mon 2024-08-19 – Sun 2024-08-25.
   const wednesday = new Date("2024-08-21T12:00:00.000Z");
 
   it("subtracts counted appointments per day and per Monday–Sunday week", () => {
-    const capacity = getRemainingCapacity(
+    const capacity = capacityOf(
       psychologistWith([
         { date: "2024-08-19T09:00:00.000Z", status: "OCCURRED" },
         { date: "2024-08-21T09:00:00.000Z", status: "UPCOMING" },
@@ -53,7 +61,7 @@ describe("getRemainingCapacity", () => {
   });
 
   it("counts NO_SHOW and LATE_CANCELLATION, but not CANCELLED or RE_SCHEDULED", () => {
-    const capacity = getRemainingCapacity(
+    const capacity = capacityOf(
       psychologistWith([
         { date: "2024-08-21T08:00:00.000Z", status: "NO_SHOW" },
         { date: "2024-08-21T10:00:00.000Z", status: "CANCELLED" },
@@ -67,7 +75,7 @@ describe("getRemainingCapacity", () => {
   });
 
   it("never goes below 0 when a clinician is already over a cap", () => {
-    const capacity = getRemainingCapacity(
+    const capacity = capacityOf(
       psychologistWith(
         ["08:00", "10:00", "14:00", "16:00"].map((time) => ({
           date: `2024-08-21T${time}:00.000Z`,
@@ -82,7 +90,7 @@ describe("getRemainingCapacity", () => {
 
 describe("remainingOn and hasRoomForBoth", () => {
   // Daily cap 2, weekly cap 3. One appointment on Mon 08-19 and one on Wed 08-21.
-  const capacity = getRemainingCapacity(
+  const capacity = capacityOf(
     psychologistWith([
       { date: "2024-08-19T09:00:00.000Z" },
       { date: "2024-08-21T09:00:00.000Z" },
@@ -145,5 +153,25 @@ describe("removeConflictingSlots", () => {
         appointment("2024-08-21T12:00:00.000Z", "RE_SCHEDULED"),
       ]),
     ).toEqual(slots);
+  });
+});
+
+describe("getRelevantAppointments", () => {
+  // Wednesday of the week Mon 2024-08-19 – Sun 2024-08-25.
+  const now = new Date("2024-08-21T12:00:00.000Z");
+  const dates = (appointments: { scheduledFor: Date }[]) =>
+    appointments.map((appointment) => appointment.scheduledFor.toISOString());
+
+  it("keeps appointments from the start of the current week onward", () => {
+    const appointments = [
+      appointment("2024-08-10T12:00:00.000Z"), // an earlier week
+      appointment("2024-08-19T09:00:00.000Z"), // this Monday, already past
+      appointment("2024-08-28T12:00:00.000Z"), // next week
+    ];
+
+    expect(dates(getRelevantAppointments(appointments, now))).toEqual([
+      "2024-08-19T09:00:00.000Z",
+      "2024-08-28T12:00:00.000Z",
+    ]);
   });
 });

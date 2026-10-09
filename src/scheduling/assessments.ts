@@ -1,7 +1,11 @@
 import { AvailableAppointmentSlot } from "../starter-code/appointment";
 import { Clinician, ClinicianType } from "../starter-code/clinician";
 import { Patient } from "../starter-code/patient";
-import { getRemainingCapacity, removeConflictingSlots } from "./capacity";
+import {
+  getRelevantAppointments,
+  getRemainingCapacity,
+  removeConflictingSlots,
+} from "./capacity";
 import { calendarDaysBetween } from "./dates";
 import { optimizeSlots } from "./optimization";
 import {
@@ -108,12 +112,12 @@ function isEligibleClinician(
  * For each slot as a first session, collect every later slot that can be its
  * second session. First sessions with no valid second session are dropped.
  *
- * `isValidPair` defaults to the gap rule; Task 3 adds weekly capacity across
- * both sessions.
+ * Since slots are sorted, the scan for second sessions stops at the first
+ * slot more than 7 calendar days out: every slot after it is too far away as
+ * well. `isValidPair` decides each slot before that point. It defaults to the
+ * gap rule; Task 3 adds weekly capacity across both sessions. It can only
+ * narrow the 7-day range, never widen it.
  *
- * Future work: this checks each slot against every later slot (quadratic per
- * clinician). Since slots are sorted, each first session's valid second
- * sessions form one continuous run that could be found with binary search.
  * Output size, not CPU, is the real limit at scale. See DECISIONS.md.
  */
 export function buildAssessmentOptions(
@@ -122,15 +126,30 @@ export function buildAssessmentOptions(
 ): AssessmentOption[] {
   const options: AssessmentOption[] = [];
 
-  sortedSlots.forEach((firstSession, index) => {
-    const laterSlots = sortedSlots.slice(index + 1);
-    const secondSessionOptions = laterSlots.filter((secondSession) =>
-      isValidPair(firstSession, secondSession),
-    );
+  for (let firstIndex = 0; firstIndex < sortedSlots.length; firstIndex++) {
+    const firstSession = sortedSlots[firstIndex];
+    const secondSessionOptions: AvailableAppointmentSlot[] = [];
+
+    for (let index = firstIndex + 1; index < sortedSlots.length; index++) {
+      const secondSession = sortedSlots[index];
+      const daysApart = calendarDaysBetween(
+        firstSession.date,
+        secondSession.date,
+      );
+      // If we reach a date that's passed the 7 day minimum gap, break
+      // Sorted, so every remaining slot is too far away too.
+      if (daysApart > ASSESSMENT.maxDaysBetweenSessions) {
+        break;
+      }
+      if (isValidPair(firstSession, secondSession)) {
+        secondSessionOptions.push(secondSession);
+      }
+    }
+
     if (secondSessionOptions.length > 0) {
       options.push({ firstSession, secondSessionOptions });
     }
-  });
+  }
 
   return options;
 }
@@ -184,8 +203,9 @@ function findOptionsByClinician(
 
     // Task 3: existing appointments and daily/weekly caps
     if (applyCapacity) {
-      const capacity = getRemainingCapacity(clinician);
-      slots = removeConflictingSlots(slots, clinician.appointments);
+      const appointments = getRelevantAppointments(clinician.appointments, now);
+      const capacity = getRemainingCapacity(clinician, appointments);
+      slots = removeConflictingSlots(slots, appointments);
       slots = slots.filter((slot) => capacity.remainingOn(slot.date) > 0);
       maxAppointmentsOn = capacity.remainingOn;
       isValidPair = (firstSession, secondSession) =>

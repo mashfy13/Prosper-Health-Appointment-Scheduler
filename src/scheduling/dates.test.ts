@@ -1,4 +1,4 @@
-import { calendarDaysBetween, utcWeekNumber } from "./dates";
+import { calendarDaysBetween, startOfUtcWeek, utcWeekNumber } from "./dates";
 
 describe("calendarDaysBetween", () => {
   const daysBetween = (from: string, to: string) =>
@@ -30,5 +30,16 @@ describe("utcWeekNumber", () => {
 
   it("is the same from Monday through Sunday", () => {
     expect(week("2024-08-25T23:59:59Z")).toBe(week("2024-08-19T00:00:00Z"));
+  });
+});
+
+describe("startOfUtcWeek", () => {
+  it("is midnight UTC on the week's Monday", () => {
+    const monday = "2024-08-19T00:00:00.000Z";
+
+    expect(startOfUtcWeek(new Date(monday)).toISOString()).toBe(monday);
+    expect(startOfUtcWeek(new Date("2024-08-25T23:59:59Z")).toISOString()).toBe(
+      monday,
+    );
   });
 });
