@@ -4,68 +4,86 @@ import { utcDayNumber } from "./dates";
 const MS_PER_MINUTE = 60 * 1000;
 
 /**
- * For a full list of sorted start times, return the most non-overlapping 
- * times that fit given the duration. 
+ * Find the earliest possible maximum-slot schedule. 
  * 
- * `end = start + duration`. 
- * 
- * Algorithm: take each start at or after the last one ends. 
- * 
- * Assumption here is that all slots are of the same length. 
+ * Iterate through the sorted slot times from beginning to end.
+ * If the slot starts on or after the last end (initialized to -infinity), 
+ * meaning it doesn't overlap the last slot
+ *  - Add the start time to the schedule 
+ *  - Update last end time to the start time + duration
  */
-function countMaxAppointments(
-  sortedStartTimes: number[],
+function earliestSchedule(
+  sortedSlotTimes: number[],
   durationMs: number,
-): number {
-  let count = 0;
+): number[] {
+  const schedule: number[] = [];
   let lastEnd = -Infinity;
-  for (const start of sortedStartTimes) {
+  for (const start of sortedSlotTimes) {
     if (start >= lastEnd) {
-      count++;
+      schedule.push(start);
       lastEnd = start + durationMs;
     }
   }
-  return count;
+  return schedule;
 }
 
 /**
- * For the given list of slots and a duration, remove any dates that would 
- * reduce the total number of available slots, if booked. 
+ * Find the latest possible maximum-slot schedule. 
  * 
- * The maxmium number of slots that can be booked for a given list of slots is 
- * determined by `countMaxAppointments`. 
- * 
- * A slot is kept if (most that fit before it) + 1 (itself) + (most that fit after it)
- * equals the maxmimum number of slots. Every date in *some* maximum schedule is
- * kept, not just one schedule, so patients see more choices (DECISIONS.md D17).
- * 
- * E.g. 12:00–13:30 every 15 minutes, 90 minutes long: max is 2 (12:00, 13:30).
- * 12:15 → 0 before + 1 + 0 after = 1, so it's dropped. Result: [12:00, 13:30].
- * 
- * Future work: this re-counts the day for each date (quadratic in dates per
- * day, ~20 in practice). A linear version (prefix/suffix counts + two
- * pointers) is ~17x faster but harder to read. See DECISIONS.md.
+ * Iterate through the sorted slot times from end to beginning (reverse).
+ * If the slot ends (start + duration) on or before the next start 
+ *  - Add the slot start time to the schedule 
+ *  - Set the next start to the slot start time
+ * Reverse the schedule to get it sorted by start time 
+ */
+function latestSchedule(
+  sortedSlotTimes: number[],
+  durationMs: number,
+): number[] {
+  const schedule: number[] = [];
+  let nextStart = Infinity;
+  for (const start of [...sortedSlotTimes].reverse()) {
+    if (start + durationMs <= nextStart) {
+      schedule.push(start);
+      nextStart = start;
+    }
+  }
+  return schedule.reverse();
+}
+
+/**
+ * For the given list of slots and a duration, remove any dates that would
+ * reduce the total number of available slots, if booked.
+ *
+ * Every date in *some* maximum schedule is kept, not just one schedule, so
+ * patients see more choices (DECISIONS.md D17).
+ *
+ * Both schedules hold the maximum number of appointments. The k-th appointment
+ * of *any* maximum schedule starts between the k-th earliest and the k-th
+ * latest start, so a date is kept if it falls inside one of those windows.
+ *
+ * E.g. Dr. Doe on 2024-09-02 (90 minutes):
+ *   earliest: 12:00  13:30  15:00  21:00  22:30
+ *   latest:   12:30  14:00  15:30  21:00  22:30
+ *   kept:     12:00–12:30, 13:30–14:00, 15:00–15:30, 21:00, 22:30
+ *   12:45 falls in no window: booking it leaves room for only 4 appointments.
+ *
+ * Returns the input `Date` objects in input order.
  */
 export function maximizeAppointmentDates(
-  dates: Date[],
+  slotDates: Date[],
   durationMinutes: number,
 ): Date[] {
   const durationMs = durationMinutes * MS_PER_MINUTE;
-  const startTimes = dates.map((date) => date.getTime()).sort((a, b) => a - b);
-  const maxAppointments = countMaxAppointments(startTimes, durationMs);
+  const slotTimes = slotDates.map((date) => date.getTime()).sort((a, b) => a - b);
+  const earliest = earliestSchedule(slotTimes, durationMs);
+  const latest = latestSchedule(slotTimes, durationMs);
 
-  return dates.filter((date) => {
-    const start = date.getTime();
-    const end = start + durationMs;
-    const fitBefore = countMaxAppointments(
-      startTimes.filter((time) => time + durationMs <= start),
-      durationMs,
+  return slotDates.filter((date) => {
+    const currentStart = date.getTime();
+    return earliest.some(
+      (earliestStart, k) => earliestStart <= currentStart && currentStart <= latest[k],
     );
-    const fitAfter = countMaxAppointments(
-      startTimes.filter((time) => time >= end),
-      durationMs,
-    );
-    return fitBefore + 1 + fitAfter === maxAppointments;
   });
 }
 
