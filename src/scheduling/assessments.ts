@@ -44,10 +44,6 @@ export type SessionPairPredicate = (
  *  - For the scope of the project, `sessionLengthMinutes` will always be 
  *    90, but this allows reuse different for appointment types
  *  - `now` is passed into this function mainly for testing purposes
- * 
- * Future work: a configurable minimum lead time (e.g. no bookings within N
- * hours) if clinicians want notice. Today any slot starting after `now` is
- * offered.
  */
 function getEligibleSlots(
   clinician: Clinician,
@@ -75,14 +71,10 @@ export const isValidSessionGap: SessionPairPredicate = (
   return daysApart >= 1 && daysApart <= ASSESSMENT.maxDaysBetweenSessions;
 };
 
-/**¸
+/**
  * Helper to determine if the given clinician is eligible for the given patient. 
  * Clinician is eligible if their states and insurances match that of the patient.
  * Additional check on `clinicianType` to filter to psychologists. 
- *
- * Future work:
- * - At thousands of clinicians, index clinicians by (state, payer) in memory,
- *   or in a DB query against indexed join tables, instead of scanning everyone.
  */
 function isEligibleClinician(
   clinician: Clinician,
@@ -117,8 +109,6 @@ function isEligibleClinician(
  * well. `isValidPair` decides each slot before that point. It defaults to the
  * gap rule; Task 3 adds weekly capacity across both sessions. It can only
  * narrow the 7-day range, never widen it.
- *
- * Output size, not CPU, is the real limit at scale. See DECISIONS.md.
  */
 export function buildAssessmentOptions(
   sortedSlots: AvailableAppointmentSlot[],
@@ -172,7 +162,7 @@ interface PipelineOptions {
  *  4. Build the final slot pairings grouped by clinician 
  *
  * Capacity runs before optimizing, so the optimizer only sees bookable slots
- * and knows how many more the clinician can take each day (D9, D18).
+ * and knows how many more the clinician can take each day.
  */
 function findOptionsByClinician(
   patient: Patient,
@@ -238,11 +228,6 @@ function findOptionsByClinician(
  * Clinicians appear in input order and are omitted if they have no options.
  * After the eligibility check, all work depends only on that one clinician's
  * data, so it can be cached, parallelized, or recomputed per clinician.
- *
- * Future work: 
- * - Rank clinicians (e.g. soonest availability) and limit how far
- *   ahead we search (a `horizonDays` option) to bound work and output size.
- * - Consider pagination 
  */
 export function findAssessmentOptions(
   patient: Patient,
@@ -273,11 +258,11 @@ export function findOptimizedAssessmentOptions(
 /**
  * Task 3 (patient-facing): Task 2, plus each clinician's existing appointments
  * and daily/weekly caps.
- *  - Slots overlapping a counted appointment are removed (D15)
+ *  - Slots overlapping a counted appointment are removed
  *  - Slots on a day or week with no capacity left are removed
  *  - Each day is optimized toward what the clinician can still take that day
- *    and week, not just what physically fits (D18)
- *  - Both sessions in the same week need 2 left in that week (D14)
+ *    and week, not just what physically fits
+ *  - Both sessions in the same week need 2 left in that week
  */
 export function findAvailableAssessmentOptions(
   patient: Patient,

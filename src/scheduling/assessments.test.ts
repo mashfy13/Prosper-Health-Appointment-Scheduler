@@ -45,7 +45,7 @@ function psychologistWithSlots(dates: string[], length = 90): Clinician {
 }
 
 describe("findAssessmentOptions", () => {
-  it("returns the README's expected pairs for Dr. Doe's 6 example slots", () => {
+  it("returns the instructions' expected pairs for Dr. Doe's 6 example slots", () => {
     const doeWithExampleSlots: Clinician = {
       ...janeDoe,
       availableSlots: [
