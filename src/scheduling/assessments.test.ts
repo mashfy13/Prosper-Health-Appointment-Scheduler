@@ -315,7 +315,7 @@ describe("findAvailableAssessmentOptions", () => {
     });
   });
 
-  it("Hermione Granger: a fully booked day's slots are removed", () => {
+  it("Jean Grey: a fully booked day's slots are removed", () => {
     expect(
       findAssessmentOptions(patient2, [jeanGrey], NOW).flatMap(
         (result) => toPairs(result.options),
@@ -328,7 +328,7 @@ describe("findAvailableAssessmentOptions", () => {
     ).toEqual([["2024-08-20T12:00:00.000Z", "2024-08-22T12:00:00.000Z"]]);
   });
 
-  it("Neville Longbottom: a fully booked week's slots are removed", () => {
+  it("Peter Parker: a fully booked week's slots are removed", () => {
     expect(
       findAssessmentOptions(patient2, [peterParker], NOW).flatMap(
         (result) => toPairs(result.options),
