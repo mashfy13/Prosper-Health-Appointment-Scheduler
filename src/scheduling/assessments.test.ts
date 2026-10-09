@@ -1,14 +1,19 @@
 import { buildClinician, buildSlot } from "../mock-data/factories";
-import { MOCK_CLINICIANS, janeDoe } from "../mock-data/clinicians";
-import { patient } from "../starter-code/mock-patient";
+import {
+  MOCK_CLINICIANS,
+  janeDoe,
+  percyJackson,
+  ronWeasley,
+} from "../mock-data/clinicians";
+import { patient, patient2 } from "../starter-code/mock-patient";
 import { Clinician } from "../starter-code/clinician";
 import {
   buildAssessmentOptions,
   findAssessmentOptions,
-  getCandidateSlots,
+  findOptimizedAssessmentOptions,
   isValidSessionGap,
 } from "./assessments";
-import { AssessmentOption } from "./types";
+import { AssessmentOption, ClinicianAssessmentOptions } from "./types";
 
 const NOW = new Date("2024-08-19T00:00:00.000Z");
 
@@ -106,40 +111,103 @@ describe("findAssessmentOptions", () => {
   });
 });
 
-describe("getCandidateSlots", () => {
-  it("excludes slots that start at or before now", () => {
-    const clinician = psychologistWithSlots([
-      "2024-08-18T12:00:00.000Z",
-      "2024-08-19T00:00:00.000Z",
-      "2024-08-19T12:00:00.000Z",
-    ]);
+describe("findOptimizedAssessmentOptions", () => {
+  const offeredDates = (options: AssessmentOption[]) =>
+    new Set(toPairs(options).flatMap(([first, second]) => [first, second]));
 
-    const dates = getCandidateSlots(clinician, 90, NOW).map((slot) =>
-      slot.date.toISOString(),
+  it("offers fewer first sessions than Task 1 for Ron Weasley and Percy Jackson", () => {
+    const firstSessionCounts = (results: ClinicianAssessmentOptions[]) =>
+      results.map(({ clinician, options }) => [clinician.id, options.length]);
+    const clinicians = [ronWeasley, percyJackson];
+
+    // Every first session pairs with the clinician's single slot on a later
+    // day, so the counts are exactly the slots kept on the optimized day.
+    expect(
+      firstSessionCounts(findAssessmentOptions(patient2, clinicians, NOW)),
+    ).toEqual([
+      [ronWeasley.id, 9],
+      [percyJackson.id, 22],
+    ]);
+    expect(
+      firstSessionCounts(
+        findOptimizedAssessmentOptions(patient2, clinicians, NOW),
+      ),
+    ).toEqual([
+      [ronWeasley.id, 6],
+      [percyJackson.id, 11],
+    ]);
+  });
+
+  it("returns the same clinicians as Task 1", () => {
+    const ids = (results: { clinician: { id: string } }[]) =>
+      results.map((result) => result.clinician.id);
+
+    expect(
+      ids(findOptimizedAssessmentOptions(patient, MOCK_CLINICIANS, NOW)),
+    ).toEqual(ids(findAssessmentOptions(patient, MOCK_CLINICIANS, NOW)));
+  });
+
+  it("only offers slots that don't reduce a day's maximum", () => {
+    const [doe] = findOptimizedAssessmentOptions(patient, [janeDoe], NOW);
+    const offered = offeredDates(doe.options);
+
+    // On 2024-09-02, 12:45 and 21:15 each cost Dr. Doe an appointment.
+    expect(offered.has("2024-09-02T12:30:00.000Z")).toBe(true);
+    expect(offered.has("2024-09-02T12:45:00.000Z")).toBe(false);
+    expect(offered.has("2024-09-02T21:15:00.000Z")).toBe(false);
+  });
+
+  it("offers a subset of Task 1's pairs", () => {
+    const [task1] = findAssessmentOptions(patient, [janeDoe], NOW);
+    const [task2] = findOptimizedAssessmentOptions(patient, [janeDoe], NOW);
+    const task1Pairs = new Set(
+      toPairs(task1.options).map((pair) => pair.join()),
     );
-    expect(dates).toEqual(["2024-08-19T12:00:00.000Z"]);
+    const task2Pairs = toPairs(task2.options);
+
+    expect(task2Pairs.length).toBeLessThan(task1Pairs.size);
+    task2Pairs.forEach((pair) =>
+      expect(task1Pairs.has(pair.join())).toBe(true),
+    );
+  });
+});
+
+describe("slot filtering (via findAssessmentOptions)", () => {
+  const pairsFor = (dates: string[], length = 90) =>
+    findAssessmentOptions(
+      patient,
+      [psychologistWithSlots(dates, length)],
+      NOW,
+    ).flatMap((result) => toPairs(result.options));
+
+  it("excludes slots that start at or before now", () => {
+    expect(
+      pairsFor([
+        "2024-08-18T12:00:00.000Z",
+        "2024-08-19T00:00:00.000Z",
+        "2024-08-20T12:00:00.000Z",
+        "2024-08-21T12:00:00.000Z",
+      ]),
+    ).toEqual([["2024-08-20T12:00:00.000Z", "2024-08-21T12:00:00.000Z"]]);
   });
 
   it("excludes slots whose length doesn't match the session length", () => {
-    const clinician = psychologistWithSlots(["2024-08-20T12:00:00.000Z"], 60);
-
-    expect(getCandidateSlots(clinician, 90, NOW)).toEqual([]);
+    expect(
+      pairsFor(["2024-08-20T12:00:00.000Z", "2024-08-21T12:00:00.000Z"], 60),
+    ).toEqual([]);
   });
 
-  it("sorts slots by start time", () => {
-    const clinician = psychologistWithSlots([
-      "2024-08-22T12:00:00.000Z",
-      "2024-08-20T12:00:00.000Z",
-      "2024-08-21T12:00:00.000Z",
-    ]);
-
-    const dates = getCandidateSlots(clinician, 90, NOW).map((slot) =>
-      slot.date.toISOString(),
-    );
-    expect(dates).toEqual([
-      "2024-08-20T12:00:00.000Z",
-      "2024-08-21T12:00:00.000Z",
-      "2024-08-22T12:00:00.000Z",
+  it("handles slots that aren't sorted by start time", () => {
+    expect(
+      pairsFor([
+        "2024-08-22T12:00:00.000Z",
+        "2024-08-20T12:00:00.000Z",
+        "2024-08-21T12:00:00.000Z",
+      ]),
+    ).toEqual([
+      ["2024-08-20T12:00:00.000Z", "2024-08-21T12:00:00.000Z"],
+      ["2024-08-20T12:00:00.000Z", "2024-08-22T12:00:00.000Z"],
+      ["2024-08-21T12:00:00.000Z", "2024-08-22T12:00:00.000Z"],
     ]);
   });
 });

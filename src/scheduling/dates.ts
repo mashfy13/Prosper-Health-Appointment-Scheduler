@@ -1,8 +1,8 @@
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
- * Helper to get a representation of a date as a number of days
- * Used to help determine number of days between to dates in `calendarDaysBeteen`
+ * Helper to get a representation of a UTC date as a number of days
+ * Used to help determine number of days between two dates in `calendarDaysBetween`
  */
 export function utcDayNumber(date: Date): number {
   return Math.floor(date.getTime() / MS_PER_DAY);
