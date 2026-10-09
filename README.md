@@ -86,19 +86,31 @@ Capacity runs before optimizing, so the optimizer only sees bookable slots and k
 
 ## Assumptions
 
+Each assumption is followed by the reasoning behind it.
+
 - **Time:**
-  - One timezone (UTC) for everything. Days are UTC calendar days, and weeks run Monday–Sunday.
+  - One timezone (UTC) for everything, and days are UTC calendar days.
+    - Handling it properly means converting to clinician and patient local time. I left that out to keep the focus on the scheduling rules (see Future enhancements).
+  - A "week" is a typical U.S. calendar/work week: Monday–Sunday.
+    - That's most likely how clinicians think about a weekly cap. Changing the week start is a one-line change in `dates.ts`.
   - No availability or appointment crosses midnight.
+    - Clinicians are unlikely to schedule appointments past midnight, so every appointment belongs to exactly one day.
 - **What's bookable:**
   - Only slots starting strictly after `now` are offered. There's no minimum lead time and no buffer between appointments.
+    - The instructions don't ask for either. A real system would likely need a configurable lead time, which would be a small addition to the slot filter.
   - Eligibility requires clinician type `PSYCHOLOGIST`, and slots must be exactly 90 minutes long.
+    - The instructions say assessments are with psychologists and last 90 minutes. Checking both guards against a mislabeled clinician or slot.
 - **Which appointments count:**
   - `UPCOMING`, `OCCURRED`, `NO_SHOW` and `LATE_CANCELLATION` count toward caps and block time. `CANCELLED` and `RE_SCHEDULED` don't.
+    - The first four use up (or used up) the clinician's time. The last two free it.
   - Edge case: a future late cancellation whose time was reopened as a slot stays hidden.
+    - This keeps one rule for every counted appointment. Handling it would mean counting late cancellations toward caps without blocking their time.
   - Caps count every appointment type. Appointments earlier in the current week count toward its weekly cap.
+    - Caps protect the clinician's total workload, whatever the appointment type or whether it has already happened.
   - A clinician's `appointments` are their own.
-- **Durations:** assessment sessions are 90 minutes and therapy is 60.
+    - The data nests them under the clinician, so they aren't filtered by `clinicianId` again.
 - **Bad data:** a clinician already over a cap is treated as having 0 remaining.
+  - Offering nothing is safer than overbooking them further.
 
 ## Key decisions and trade-offs
 
