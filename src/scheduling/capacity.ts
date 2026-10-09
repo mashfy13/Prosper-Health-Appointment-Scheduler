@@ -36,6 +36,13 @@ function isCountedAppointment(appointment: Appointment): boolean {
 export interface RemainingCapacity {
   onDay: (date: Date) => number;
   inWeek: (date: Date) => number;
+  /** The smaller of the two: how many more fit on that date. */
+  remainingOn: (date: Date) => number;
+  /**
+   * Whether both assessment sessions fit (D14). Each date is assumed to have
+   * room on its own; if both are in the same week, that week needs 2 left.
+   */
+  hasRoomForBoth: (firstDate: Date, secondDate: Date) => boolean;
 }
 
 /**
@@ -47,26 +54,36 @@ export interface RemainingCapacity {
 export function getRemainingCapacity(clinician: Clinician): RemainingCapacity {
   const bookedByDay = new Map<number, number>();
   const bookedByWeek = new Map<number, number>();
-  for (const appointment of clinician.appointments.filter(isCountedAppointment)) {
+  const countedAppointments =
+    clinician.appointments.filter(isCountedAppointment);
+  for (const appointment of countedAppointments) {
     const day = utcDayNumber(appointment.scheduledFor);
     const week = utcWeekNumber(appointment.scheduledFor);
     bookedByDay.set(day, (bookedByDay.get(day) ?? 0) + 1);
     bookedByWeek.set(week, (bookedByWeek.get(week) ?? 0) + 1);
   }
 
+  const onDay = (date: Date) =>
+    Math.max(
+      0,
+      clinician.maxDailyAppointments -
+        (bookedByDay.get(utcDayNumber(date)) ?? 0),
+    );
+  const inWeek = (date: Date) =>
+    Math.max(
+      0,
+      clinician.maxWeeklyAppointments -
+        (bookedByWeek.get(utcWeekNumber(date)) ?? 0),
+    );
+
   return {
-    onDay: (date) =>
-      Math.max(
-        0,
-        clinician.maxDailyAppointments -
-          (bookedByDay.get(utcDayNumber(date)) ?? 0),
-      ),
-    inWeek: (date) =>
-      Math.max(
-        0,
-        clinician.maxWeeklyAppointments -
-          (bookedByWeek.get(utcWeekNumber(date)) ?? 0),
-      ),
+    onDay,
+    inWeek,
+    remainingOn: (date) => Math.min(onDay(date), inWeek(date)),
+    hasRoomForBoth: (firstDate, secondDate) => {
+      const sameWeek = utcWeekNumber(firstDate) === utcWeekNumber(secondDate);
+      return !sameWeek || inWeek(firstDate) >= 2;
+    },
   };
 }
 
@@ -82,16 +99,18 @@ export function removeConflictingSlots(
   slots: AvailableAppointmentSlot[],
   appointments: Appointment[],
 ): AvailableAppointmentSlot[] {
-  const blockedTimes = appointments.filter(isCountedAppointment).map((appointment) => {
-    const start = appointment.scheduledFor.getTime();
-    return {
-      start,
-      end:
-        start +
-        APPOINTMENT_DURATION_MINUTES[appointment.appointmentType] *
-          MS_PER_MINUTE,
-    };
-  });
+  const blockedTimes = appointments
+    .filter(isCountedAppointment)
+    .map((appointment) => {
+      const start = appointment.scheduledFor.getTime();
+      return {
+        start,
+        end:
+          start +
+          APPOINTMENT_DURATION_MINUTES[appointment.appointmentType] *
+            MS_PER_MINUTE,
+      };
+    });
 
   return slots.filter((slot) => {
     const start = slot.date.getTime();

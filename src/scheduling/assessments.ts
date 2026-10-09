@@ -2,7 +2,7 @@ import { AvailableAppointmentSlot } from "../starter-code/appointment";
 import { Clinician, ClinicianType } from "../starter-code/clinician";
 import { Patient } from "../starter-code/patient";
 import { getRemainingCapacity, removeConflictingSlots } from "./capacity";
-import { calendarDaysBetween, utcWeekNumber } from "./dates";
+import { calendarDaysBetween } from "./dates";
 import { optimizeSlots } from "./optimization";
 import {
   AssessmentOption,
@@ -108,8 +108,8 @@ function isEligibleClinician(
  * For each slot as a first session, collect every later slot that can be its
  * second session. First sessions with no valid second session are dropped.
  *
- * `isValidPair` is injectable so later rules (e.g. weekly capacity across both
- * sessions) can extend the default gap rule.
+ * `isValidPair` defaults to the gap rule; Task 3 adds weekly capacity across
+ * both sessions.
  *
  * Future work: this checks each slot against every later slot (quadratic per
  * clinician). Since slots are sorted, each first session's valid second
@@ -120,22 +120,27 @@ export function buildAssessmentOptions(
   sortedSlots: AvailableAppointmentSlot[],
   isValidPair: SessionPairPredicate = isValidSessionGap,
 ): AssessmentOption[] {
-  return sortedSlots
-    .map((firstSession, index) => ({
-      firstSession,
-      secondSessionOptions: sortedSlots
-        .slice(index + 1)
-        .filter((secondSession) => isValidPair(firstSession, secondSession)),
-    }))
-    .filter((option) => option.secondSessionOptions.length > 0);
+  const options: AssessmentOption[] = [];
+
+  sortedSlots.forEach((firstSession, index) => {
+    const laterSlots = sortedSlots.slice(index + 1);
+    const secondSessionOptions = laterSlots.filter((secondSession) =>
+      isValidPair(firstSession, secondSession),
+    );
+    if (secondSessionOptions.length > 0) {
+      options.push({ firstSession, secondSessionOptions });
+    }
+  });
+
+  return options;
 }
 
-/** Per-clinician steps that differ between Tasks 1, 2 and 3. */
-interface ClinicianRules {
-  filterSlots: (
-    sortedSlots: AvailableAppointmentSlot[],
-  ) => AvailableAppointmentSlot[];
-  isValidPair: SessionPairPredicate;
+/** Which steps each entry point adds on top of Task 1. */
+interface PipelineOptions {
+  /** Task 2: don't offer slots that would cost the day an appointment. */
+  optimize: boolean;
+  /** Task 3: existing appointments and daily/weekly caps. */
+  applyCapacity: boolean;
 }
 
 /**
@@ -143,39 +148,68 @@ interface ClinicianRules {
  *  1. Clinician eligbility 
  *  2. Slot eligibility 
  *  3. Filter slots further 
+ *    - Factoring in clinician daily and weekly limits (Task 3)
+ *    - Optimizing maximum number of slots (Task 2)
  *  4. Build the final slot pairings grouped by clinician 
- * 
- * `getRules(clinician)` returns that clinician's steps 3 and 4:
- *  - `filterSlots()` is a callback to filter the slots further 
- *    - Optimizing maximum number of slots 
- *    - Factoring in clinician daily and weekly limits
- *  - `isValidPair()` decides which session pairs are allowed
- * It takes the clinician because Task 3 needs their appointments and caps.
+ *
+ * Capacity runs before optimizing, so the optimizer only sees bookable slots
+ * and knows how many more the clinician can take each day (D9, D18).
  */
- function findOptionsByClinician(
+function findOptionsByClinician(
   patient: Patient,
   clinicians: Clinician[],
   now: Date,
-  getRules: (clinician: Clinician) => ClinicianRules,
+  { optimize, applyCapacity }: PipelineOptions,
 ): ClinicianAssessmentOptions[] {
-  return clinicians
-    .filter((clinician) =>
-      isEligibleClinician(clinician, patient, ASSESSMENT.clinicianType),
-    )
-    .map((clinician) => {
-      const { filterSlots, isValidPair } = getRules(clinician);
-      return {
-        clinician: toClinicianSummary(clinician),
-        options: buildAssessmentOptions(
-          filterSlots(
-            getEligibleSlots(clinician, ASSESSMENT.sessionLengthMinutes, now),
-          ),
-          isValidPair,
-        ),
-      };
-    })
+  const results: ClinicianAssessmentOptions[] = [];
+
+  for (const clinician of clinicians) {
+    // Exclude clinicians that are ineligible for the patient
+    if (!isEligibleClinician(clinician, patient, ASSESSMENT.clinicianType)) {
+      continue;
+    }
+
+    // First pass over clinician's available slots to only include slots that are
+    // in the future and meet the session length requirement 
+    let slots = getEligibleSlots(
+      clinician,
+      ASSESSMENT.sessionLengthMinutes,
+      now,
+    );
+    
+    // If capacity rule is not being applied, only the valid gap rule needs to 
+    // be checked 
+    let isValidPair: SessionPairPredicate = isValidSessionGap;
+    let maxAppointmentsOn: (date: Date) => number = () => Infinity;
+
+    // Task 3: existing appointments and daily/weekly caps
+    if (applyCapacity) {
+      const capacity = getRemainingCapacity(clinician);
+      slots = removeConflictingSlots(slots, clinician.appointments);
+      slots = slots.filter((slot) => capacity.remainingOn(slot.date) > 0);
+      maxAppointmentsOn = capacity.remainingOn;
+      isValidPair = (firstSession, secondSession) =>
+        isValidSessionGap(firstSession, secondSession) &&
+        capacity.hasRoomForBoth(firstSession.date, secondSession.date);
+    }
+
+    // Task 2: don't offer slots that would cost the day an appointment
+    if (optimize) {
+      slots = optimizeSlots(
+        slots,
+        ASSESSMENT.sessionLengthMinutes,
+        maxAppointmentsOn,
+      );
+    }
+
+    const options = buildAssessmentOptions(slots, isValidPair);
     // Omit any clinicians that do not have eligible slots 
-    .filter((result) => result.options.length > 0);
+    if (options.length > 0) {
+      results.push({ clinician: toClinicianSummary(clinician), options });
+    }
+  }
+
+  return results;
 }
 
 /**
@@ -195,10 +229,10 @@ export function findAssessmentOptions(
   clinicians: Clinician[],
   now: Date = new Date(),
 ): ClinicianAssessmentOptions[] {
-  return findOptionsByClinician(patient, clinicians, now, () => ({
-    filterSlots: (slots) => slots,
-    isValidPair: isValidSessionGap,
-  }));
+  return findOptionsByClinician(patient, clinicians, now, {
+    optimize: false,
+    applyCapacity: false,
+  });
 }
 
 /**
@@ -210,11 +244,10 @@ export function findOptimizedAssessmentOptions(
   clinicians: Clinician[],
   now: Date = new Date(),
 ): ClinicianAssessmentOptions[] {
-  return findOptionsByClinician(patient, clinicians, now, () => ({
-    filterSlots: (slots) =>
-      optimizeSlots(slots, ASSESSMENT.sessionLengthMinutes),
-    isValidPair: isValidSessionGap,
-  }));
+  return findOptionsByClinician(patient, clinicians, now, {
+    optimize: true,
+    applyCapacity: false,
+  });
 }
 
 /**
@@ -231,25 +264,8 @@ export function findAvailableAssessmentOptions(
   clinicians: Clinician[],
   now: Date = new Date(),
 ): ClinicianAssessmentOptions[] {
-  return findOptionsByClinician(patient, clinicians, now, (clinician) => {
-    const capacity = getRemainingCapacity(clinician);
-    const remainingOn = (date: Date) =>
-      Math.min(capacity.onDay(date), capacity.inWeek(date));
-
-    return {
-      filterSlots: (slots) =>
-        optimizeSlots(
-          removeConflictingSlots(slots, clinician.appointments).filter(
-            (slot) => remainingOn(slot.date) > 0,
-          ),
-          ASSESSMENT.sessionLengthMinutes,
-          remainingOn,
-        ),
-      isValidPair: (firstSession, secondSession) =>
-        isValidSessionGap(firstSession, secondSession) &&
-        (utcWeekNumber(firstSession.date) !==
-          utcWeekNumber(secondSession.date) ||
-          capacity.inWeek(firstSession.date) >= 2),
-    };
+  return findOptionsByClinician(patient, clinicians, now, {
+    optimize: true,
+    applyCapacity: true,
   });
 }

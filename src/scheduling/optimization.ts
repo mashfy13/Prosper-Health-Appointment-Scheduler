@@ -126,12 +126,12 @@ export function optimizeSlots(
 
   const keptSlotTimes = new Set<number>();
   for (const datesForDay of slotDatesByDay.values()) {
-    const maxAppointments = maxAppointmentsOn(datesForDay[0]);
-    for (const date of maximizeAppointmentDates(
+    const keptDates = maximizeAppointmentDates(
       datesForDay,
       durationMinutes,
-      maxAppointments,
-    )) {
+      maxAppointmentsOn(datesForDay[0]),
+    );
+    for (const date of keptDates) {
       keptSlotTimes.add(date.getTime());
     }
   }
