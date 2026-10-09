@@ -8,7 +8,7 @@ const toIso = (dates: Date[]) => dates.map((date) => date.toISOString());
 /** ISO time on `day` (default 2024-08-19), e.g. at("12:15") → "2024-08-19T12:15:00.000Z". */
 const at = (time: string, day = "2024-08-19") => `${day}T${time}:00.000Z`;
 
-const README_DATES = [
+const EXAMPLE_DATES = [
   "12:00",
   "12:15",
   "12:30",
@@ -19,8 +19,8 @@ const README_DATES = [
 ].map((time) => at(time));
 
 describe("maximizeAppointmentDates", () => {
-  it("keeps only 12:00 and 13:30 for the README example", () => {
-    const kept = maximizeAppointmentDates(toDates(README_DATES), 90);
+  it("keeps only 12:00 and 13:30 for the instructions' example", () => {
+    const kept = maximizeAppointmentDates(toDates(EXAMPLE_DATES), 90);
 
     expect(toIso(kept)).toEqual([at("12:00"), at("13:30")]);
   });
@@ -80,10 +80,10 @@ describe("maximizeAppointmentDates", () => {
 
   it("uses the given duration", () => {
     // At 60 minutes, only 12:45 prevents fitting 2 appointments.
-    const kept = maximizeAppointmentDates(toDates(README_DATES), 60);
+    const kept = maximizeAppointmentDates(toDates(EXAMPLE_DATES), 60);
 
     expect(toIso(kept)).toEqual(
-      README_DATES.filter((date) => date !== at("12:45")),
+      EXAMPLE_DATES.filter((date) => date !== at("12:45")),
     );
   });
 
@@ -117,7 +117,7 @@ describe("maximizeAppointmentDates with a cap (maxAppointments)", () => {
   });
 
   it("keeps every date when only 1 more appointment can be booked", () => {
-    const dates = toDates(README_DATES);
+    const dates = toDates(EXAMPLE_DATES);
 
     expect(maximizeAppointmentDates(dates, 90, 1)).toEqual(dates);
   });
@@ -135,7 +135,7 @@ describe("maximizeAppointmentDates with a cap (maxAppointments)", () => {
   });
 
   it("matches no cap when the cap is at or above what fits", () => {
-    const dates = toDates(README_DATES);
+    const dates = toDates(EXAMPLE_DATES);
     const uncapped = maximizeAppointmentDates(dates, 90);
 
     expect(maximizeAppointmentDates(dates, 90, 2)).toEqual(uncapped);
@@ -143,7 +143,7 @@ describe("maximizeAppointmentDates with a cap (maxAppointments)", () => {
   });
 
   it("keeps nothing with a cap of 0", () => {
-    expect(maximizeAppointmentDates(toDates(README_DATES), 90, 0)).toEqual([]);
+    expect(maximizeAppointmentDates(toDates(EXAMPLE_DATES), 90, 0)).toEqual([]);
   });
 });
 
@@ -187,8 +187,8 @@ describe("optimizeSlots", () => {
 
   it("optimizes each day independently and returns the same slot objects", () => {
     const slots = [
-      ...README_DATES,
-      ...README_DATES.map((date) => date.replace("2024-08-19", "2024-08-20")),
+      ...EXAMPLE_DATES,
+      ...EXAMPLE_DATES.map((date) => date.replace("2024-08-19", "2024-08-20")),
     ].map((date) => buildSlot("c", date, 90));
 
     const kept = optimizeSlots(slots, 90);
@@ -221,8 +221,8 @@ describe("optimizeSlots", () => {
   it("applies each day's cap from maxAppointmentsOn", () => {
     // 08-19 can take 1 more (keeps all 7); 08-20 has no cap (keeps 2).
     const slots = [
-      ...README_DATES,
-      ...README_DATES.map((date) => date.replace("2024-08-19", "2024-08-20")),
+      ...EXAMPLE_DATES,
+      ...EXAMPLE_DATES.map((date) => date.replace("2024-08-19", "2024-08-20")),
     ].map((date) => buildSlot("c", date, 90));
 
     const kept = optimizeSlots(slots, 90, (date) =>
@@ -230,7 +230,7 @@ describe("optimizeSlots", () => {
     );
 
     expect(keptTimes(kept)).toEqual([
-      ...README_DATES,
+      ...EXAMPLE_DATES,
       at("12:00", "2024-08-20"),
       at("13:30", "2024-08-20"),
     ]);

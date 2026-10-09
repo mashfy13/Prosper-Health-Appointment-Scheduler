@@ -56,7 +56,7 @@ function latestSchedule(
  * reduce the total number of available slots, if booked.
  *
  * Every date in *some* maximum schedule is kept, not just one schedule, so
- * patients see more choices (DECISIONS.md D17).
+ * patients see more choices.
  *
  * A date is kept if booking it still lets the day reach its target:
  *   (most that fit before it) + 1 + (most that fit after it) >= target
@@ -66,7 +66,7 @@ function latestSchedule(
  *
  * The target is the most that physically fit, capped by `maxAppointments`
  * (Task 3: the clinician's remaining daily/weekly capacity). There's no reason
- * to hide a slot to protect room the clinician can't use (DECISIONS.md D18).
+ * to hide a slot to protect room the clinician can't use.
  *
  * E.g. Dr. Doe on 2024-09-02 (90 minutes):
  *   earliest: 12:00  13:30  15:00  21:00  22:30   (5 fit)

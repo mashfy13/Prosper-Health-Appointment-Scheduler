@@ -10,8 +10,8 @@ import { startOfUtcWeek, utcDayNumber, utcWeekNumber } from "./dates";
 const MS_PER_MINUTE = 60 * 1000;
 
 /**
- * Statuses that count toward a clinician's caps and block their time
- * (DECISIONS.md D11). Cancelled and rescheduled appointments free the time.
+ * Statuses that count toward a clinician's caps and block their time.
+ * Cancelled and rescheduled appointments free the time.
  */
 const COUNTED_STATUSES: AppointmentStatus[] = [
   "UPCOMING",
@@ -63,7 +63,7 @@ export interface RemainingCapacity {
   /** The smaller of the two: how many more fit on that date. */
   remainingOn: (date: Date) => number;
   /**
-   * Whether both assessment sessions fit (D14). Each date is assumed to have
+   * Whether both assessment sessions fit. Each date is assumed to have
    * room on its own; if both are in the same week, that week needs 2 left.
    */
   hasRoomForBoth: (firstDate: Date, secondDate: Date) => boolean;
@@ -114,15 +114,14 @@ export function getRemainingCapacity(
 }
 
 /**
- * Removes slots that overlap a counted appointment (DECISIONS.md D15).
+ * Removes slots that overlap a counted appointment.
  * Back-to-back (one ends exactly when the other starts) isn't an overlap.
  *
  * Checks every slot against every appointment. That stays small because
  * history is filtered out first (`getRelevantAppointments`) and future
- * appointments are bounded by the weekly cap.
- *
- * Future work: sorting both and sweeping once would be O(slots +
- * appointments), if a clinician ever had far more future appointments.
+ * appointments are bounded by the weekly cap. If a clinician ever had far
+ * more future appointments, sorting both and sweeping once would make this
+ * O(slots + appointments).
  */
 export function removeConflictingSlots(
   slots: AvailableAppointmentSlot[],

@@ -1,358 +1,171 @@
-# Prosper Health Engineering Take Home
+# Prosper Health Assessment Scheduler
 
-2025
+Finds the assessment times a patient can book: two 90-minute sessions with the same in-network psychologist, on different days, no more than 7 days apart. Built as plain TypeScript functions with Jest tests and mocked data (no server or database), per the [take-home instructions](INSTRUCTIONS.md).
 
-# Scenario
+## Running it
 
-We want new patients to schedule their appointments online. Given a patient who comes in wanting our services (therapy and/or an assessment), which times are available for them to book? And with which clinicians?
-
-# Output
-
-When you’re done with the project, please share a link to a GitHub repo with a short README and schedule some time on my calendar for us to discuss your work: [https://calendly.com/prosper-byrne/30min](https://calendly.com/prosper-byrne/30min).
-
-You’re welcome to do this in whichever language you’re most comfortable in. (If you’re having a hard time choosing, I recommend TypeScript!)
-
-# Details
-
-We have 2 types of clinicians and 4 types of appointments:
-
-1. Therapists
-   1. They have 60 minute long appointments with clients (`THERAPY_INTAKE` and `THERAPY_SIXTY_MINS`)
-      1. Only the intake appointment (`THERAPY_INTAKE`) needs to be scheduled online – all recurring therapy sessions (`THERAPY_SIXTY_MINS`) are scheduled by therapists either in-session or by chat after the intake.
-2. Psychologists
-   1. They have 90 minute long appointments with clients (`ASSESSMENT_SESSION_1` and `ASSESSMENT_SESSION_2`).
-
-When we schedule someone for their first therapy session, they are scheduled for a 60 minute `THERAPY_INTAKE` appointment with a therapist in their state who accepts their insurance.
-
-When we schedule someone for an assessment with a psychologist, we schedule them for _both_ 90-minute sessions. These sessions must be on different days but no more than 7 days apart.
-
-We are using an electronic health records (EHR) system that lets us query for clinician availability and existing appointments, and we have stored this data in the following tables:
-
-```jsx
-model AvailableSlot {
-  id                      String
-  clinicianId             String    @db.Uuid
-  clinician               Clinician @relation(fields: [clinicianId], references: [id])
-  date                    DateTime
-  length                  Int
-  createdAt               DateTime  @default(now())
-  updatedAt               DateTime  @default(now()) @updatedAt
-}
-
-model Appointment {
-  id                      String
-  patientId               String    @db.Uuid
-  patient                 Patient   @relation(fields: [patientId], references: [id])
-  clinicianId             String    @db.Uuid
-  clinician               Clinician @relation(fields: [clinicianId], references: [id])
-  scheduledFor            DateTime
-  appointmentType         AppointmentType
-  status                  AppointmentStatus
-  createdAt               DateTime  @default(now())
-  updatedAt               DateTime  @default(now()) @updatedAt
-}
-
-enum AppointmentType {
-  ASSESSMENT_SESSION_1
-  ASSESSMENT_SESSION_2
-  THERAPY_INTAKE
-  THERAPY_SIXTY_MINS
-}
-
-enum AppointmentStatus {
-  UPCOMING
-  OCCURRED
-  NO_SHOW
-  RE_SCHEDULED
-  CANCELLED
-  LATE_CANCELLATION
-}
+```bash
+npm install
+npm test        # Jest test suite
+npm run dev     # prints Task 1, 2 and 3 results for a sample patient
 ```
 
-Here are some examples of `AvailableSlot`s:
+The mock data is from August–September 2024, so the dev script and tests use a fixed `now` of `2024-08-19T00:00Z`. To switch the sample patient, change the import at the top of `src/index.ts`.
 
-```jsx
-id,clinicianId,date,length,createdAt,updatedAt
-1eb8f4c2-b7a7-4bf1-b738-b1e5875f4fec,9c516382-c5b2-4677-a7ac-4e100fa35bdd,2024-08-27 18:00:00,90,2024-08-15 14:45:15.462,2024-08-15 14:45:15.462
-64759e13-c8c8-4310-9cf1-00bed7b394a8,9c516382-c5b2-4677-a7ac-4e100fa35bdd,2024-08-27 18:45:00,90,2024-08-15 14:45:15.462,2024-08-15 14:45:15.462
-ed95c383-9059-4054-8270-bd9e2fd12ebb,68ae6b35-c27f-4f62-9b21-b6783c24a370,2024-08-28 18:45:00,60,2024-08-15 14:45:15.462,2024-08-15 14:45:15.462
-f118a534-3269-4a28-95fc-6b0523d31c1a,68ae6b35-c27f-4f62-9b21-b6783c24a370,2024-08-28 19:00:00,60,2024-08-15 14:45:15.462,2024-08-15 14:45:15.462
+## Project structure
+
+```
+src/
+  scheduling/
+    assessments.ts    entry points and the shared per-clinician pipeline
+    optimization.ts   Task 2: per-day slot optimization
+    capacity.ts       Task 3: existing appointments and daily/weekly caps
+    dates.ts          UTC day/week helpers
+    types.ts          output types
+  mock-data/          mock clinicians (one per rule being demonstrated) and factories
+  starter-code/       provided types and data, unchanged apart from a second mock patient
+  index.ts            dev script
 ```
 
-Note that:
+## Solution overview
 
-- The first 2 slots are 90 minutes long (`length` is measured in minutes) and the second 2 slots are 60 minutes long.
-  - We would join on `clinicianId` to determine if the `Clinician` is a `THERAPIST` or a `PSYCHOLOGIST` but, as the business stands today, we can determine that anyone with a 90 minute long slot is a `PSYCHOLOGIST` and anyone with a 60 minute long slot is a `THERAPIST`.
-- The `date`s are all in UTC and represent the start time for the slot
-- So the slot starting at `2024-08-27 18:00:00` at lasting 90 minutes would end at `2024-08-27 19:30:00`
+There is one entry point per task. Each builds on the previous one:
 
-I think the `Appointment` model is mostly self-explanatory, but please feel free to ask any questions about it.
+| Task | Function                                                    | Adds                                                                                      |
+| ---- | ----------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| 1    | `findAssessmentOptions(patient, clinicians, now?)`          | Every valid session pair from eligible psychologists                                      |
+| 2    | `findOptimizedAssessmentOptions(patient, clinicians, now?)` | Hides slots that would reduce how many appointments a day can hold                        |
+| 3    | `findAvailableAssessmentOptions(patient, clinicians, now?)` | Respects existing appointments and daily/weekly caps. **This is the patient-facing one.** |
 
-We have the following schema for `Patient`s and `Clinician`s:
+The Task 2 helper requested in the instructions is `maximizeAppointmentDates(dates, durationMinutes)` in `optimization.ts`.
 
-```jsx
-model Patient {
-  id                      String
-  firstName               String
-  lastName                String
-  state                   UsState
-  insurance               InsurancePayer
-  createdAt               DateTime  @default(now())
-  updatedAt               DateTime  @default(now()) @updatedAt
-}
+All three share one pipeline that runs top to bottom for each clinician:
 
-model Clinician {
-  id                      String
-  firstName               String
-  lastName                String
-  states                  UsState[]
-  insurances              InsurancePayer[]
-  clinicianType           ClinicianType
-  appointments            Appointment[]
-  availableSlots          AvailableSlot[]
-  maxDailyAppointments    Int
-  maxWeeklyAppointments   Int
-  createdAt               DateTime  @default(now())
-  updatedAt               DateTime  @default(now()) @updatedAt
-}
+1. **Eligible clinician:** a psychologist licensed in the patient's state who accepts their insurance.
+2. **Eligible slots:** 90 minutes long and starting after `now`, sorted by time.
+3. **Capacity (Task 3):** remove slots that overlap an existing appointment or fall on a day or week with no capacity left.
+4. **Optimize (Task 2):** within each day, keep only slots that don't cost the day an appointment.
+5. **Pair:** match each first session with every valid second session.
 
-enum ClinicianType {
-  THERAPIST
-  PSYCHOLOGIST
-}
+Results are grouped by clinician, then by first session:
 
-enum UsState {
-  NY
-  NC
-  FL
-  // etc
-}
-
-enum InsurancePayer {
-  AETNA
-  BCBS
-  CIGNA
-  // etc
-}
+```ts
+{ clinician: { id, firstName, lastName },
+  options: [{ firstSession, secondSessionOptions: [...] }, ...] }[]
 ```
 
-There are a few things to note about `Clinician`s:
+Clinicians with no options are left out. Clinicians keep their input order.
 
-1. `maxDailyAppointments` – this is the absolute maximum number of appointments a Clinician can have per day; a client should never be able to book an appointment on a day where a clinician has number of booked appointments ≥ to `maxDailyAppointments`
-   1. This is set on a clinician-by-clinician basis
-2. `maxWeeklyAppointments` – this is the absolute maximum number of appointments a clinician have per week.
-   1. This is set on a clinician-by-clinician basis
-3. They can operate in multiple `states`, but must have at least one state
-4. They can accept multiple `insurances`, and must have at least one insurance
+## How each task works
 
-One other thing to note about scheduling:
+**Task 1: pairing.** Slots are sorted, so for each first session the code walks forward and keeps slots 1–7 calendar days later. It stops at the first slot more than 7 days out, since every slot after it is too far away too. "7 days" means calendar days, not 168 hours: the instructions' example pairs `08-21 12:00` with `08-28 12:15`.
 
-- A patient can only schedule with a provider who accepts their insurance and operates in their state
+**Task 2: keeping each day's maximum.** A slot is kept if booking it still lets the day reach its maximum number of appointments:
 
-# Tasks
-
-The following three tasks will build upon one another.
-
-## Task 1: Assessment slots
-
-Write some code that takes a patient and outputs a list of available assessment slots for them to schedule; the slots should be grouped by clinician.
-
-<aside>
-💡 As mentioned above, when we schedule someone for an assessment with a psychologist, we schedule them for *both* 90-minute sessions. These sessions must be on different days but no more than 7 days apart. So we really need to offer 2 appointment times to a client scheduling an assessment.
-
-</aside>
-
-**Example:**
-
-**Input:**
-
-Patient `Byrne Hollander` lives in `NY` and has insurance of `AETNA` and wants just an assessment.
-
-```jsx
-// The patient coming in for services - they want just an assessment
-{
-   id: "some-uuidv4",
-   firstName: "Byrne",
-   lastName: "Hollander",
-   state: UsState.NY,
-   insurance: InsurancePayer.AETNA,
-   createdAt: new Date(),
-   updatedAt: new Date()
-}
+```
+(most that fit before it) + 1 + (most that fit after it) >= the day's target
 ```
 
-```jsx
-// Our database table of clinicians and appointments... we only have 1
-// right now, but we'll be growing fast!
-// We also don't have any appointments booked yet with Dr. Doe –
-// let's revisit this piece (appointments and max appointments) later
+Two greedy passes give those counts in linear time:
 
-{
-  id: "9c516382-c5b2-4677-a7ac-4e100fa35bdd",
-  firstName: "Jane",
-  lastName: "Doe",
-  states: [UsState.NY, UsState.CA],
-  insurances: [InsurancePayer.Aetna, InsurancePayer.Cigna],
-  clinicianType: ClinicianType.PSYCHOLOGIST,
-  appointments: [],
-  maxDailyAppointments: 2,
-  maxWeeklyAppointments: 8,
-}
-```
+- The _earliest_ schedule packs appointments as early as possible. The most that fit before a slot is how many of them end by its start.
+- The _latest_ schedule packs them as late as possible. The most that fit after a slot is how many of them start after it ends.
 
-Here’s a JSON dump of actual slots from our db so you don’t need to come up with all synthetic data:
+For example, Dr. Doe on 2024-09-02 fits 5 appointments. Booking 12:45 leaves 0 before + 1 + 3 after = 4, so 12:45 is hidden.
 
-[slots.json](Prosper%20Health%20Engineering%20Take%20Home%20115483f1ec5780deaf59efbcd2bdd4c4/slots.json)
+This keeps every slot that belongs to _some_ maximum schedule, not just one fixed schedule, so patients see more choices (see trade-offs below).
 
-**Expected output:**
+**Task 3: capacity.**
 
-Let’s look at 6 of these slots in particular (all for Dr. Doe, the psychologist above):
+- **Conflicts:** slots that overlap an existing appointment are removed. Back-to-back is fine. An appointment's length comes from its type.
+- **Full days and weeks:** slots on a day or week that has reached its cap are removed.
+- **Optimizer target:** each day's target becomes `min(remaining daily cap, remaining weekly cap, what physically fits)`. There's no point hiding slots to protect capacity the clinician can't use. Dr. Doe's daily cap is 2, so almost all of her slots are offered, even though 5 fit on some days.
+- **Same-week pairs:** if both sessions fall in the same week, that week needs 2 bookings left.
 
-```jsx
-[
-  {
-    length: 90,
-    date: "2024-08-19T12:00:00.000Z",
-  },
-  {
-    length: 90,
-    date: "2024-08-19T12:15:00.000Z",
-  },
-  {
-    length: 90,
-    date: "2024-08-21T12:00:00.000Z",
-  },
-  {
-    length: 90,
-    date: "2024-08-21T15:00:00.000Z",
-  },
-  {
-    length: 90,
-    date: "2024-08-22T15:00:00.000Z",
-  },
-  {
-    length: 90,
-    date: "2024-08-28T12:15:00.000Z",
-  },
-];
-```
+Capacity runs before optimizing, so the optimizer only sees bookable slots and knows each day's real limit.
 
-The pairs of times that can be offered to clients are:
+## Assumptions
 
-```jsx
-[
-  ("2024-08-19T12:00:00.000Z", "2024-08-21T12:00:00.000Z"),
-  ("2024-08-19T12:00:00.000Z", "2024-08-21T15:00:00.000Z"),
-  ("2024-08-19T12:00:00.000Z", "2024-08-22T15:00:00.000Z"),
-  ("2024-08-19T12:15:00.000Z", "2024-08-21T12:00:00.000Z"),
-  ("2024-08-19T12:15:00.000Z", "2024-08-21T15:00:00.000Z"),
-  ("2024-08-19T12:15:00.000Z", "2024-08-22T15:00:00.000Z"),
-  ("2024-08-21T12:00:00.000Z", "2024-08-22T15:00:00.000Z"),
-  ("2024-08-21T12:00:00.000Z", "2024-08-28T12:15:00.000Z"),
-  ("2024-08-21T15:00:00.000Z", "2024-08-22T15:00:00.000Z"),
-  ("2024-08-21T15:00:00.000Z", "2024-08-28T12:15:00.000Z"),
-  ("2024-08-22T15:00:00.000Z", "2024-08-28T12:15:00.000Z"),
-];
-```
+- **Time:**
+  - One timezone (UTC) for everything. Days are UTC calendar days, and weeks run Monday–Sunday.
+  - No availability or appointment crosses midnight.
+- **What's bookable:**
+  - Only slots starting strictly after `now` are offered. There's no minimum lead time and no buffer between appointments.
+  - Eligibility requires clinician type `PSYCHOLOGIST`, and slots must be exactly 90 minutes long.
+- **Which appointments count:**
+  - `UPCOMING`, `OCCURRED`, `NO_SHOW` and `LATE_CANCELLATION` count toward caps and block time. `CANCELLED` and `RE_SCHEDULED` don't.
+  - Edge case: a future late cancellation whose time was reopened as a slot stays hidden.
+  - Caps count every appointment type. Appointments earlier in the current week count toward its weekly cap.
+  - A clinician's `appointments` are their own.
+- **Durations:** assessment sessions are 90 minutes and therapy is 60.
+- **Bad data:** a clinician already over a cap is treated as having 0 remaining.
 
-**I.e., the code you write should return the above data.** It doesn’t need to be structured as an array of tuples, you can go with a different approach if you want.
+## Key decisions and trade-offs
 
-You definitely don’t need to use Prisma or actually set up a db – you can mock the patient, clinician(s), available slots, and appointments however you like.
+- **Every maximum schedule, not one schedule (Task 2).**
+  - "Remove slots that reduce the day's maximum" could also mean "offer one fixed best schedule". I chose the first reading because it gives patients more choice.
+  - Cost: for Dr. Doe, it offers 246 of 458 slots (9,999 pairs), versus 109 slots (2,067 pairs) for one greedy schedule.
+- **Separate entry points, one pipeline.**
+  - Tasks 1 and 2 stay runnable on their own, so the instructions' examples remain reproducible.
+  - The pipeline is a single function with `optimize` and `applyCapacity` flags. Each task's steps show up as a visible `if` block rather than being spread across callbacks.
+- **Readability over cleverness.**
+  - Plain loops are used where input sizes are bounded.
+  - Task 2 uses the "before + 1 + after" rule because it states the business rule directly. It works the same with or without caps.
+- **Testable by design.** `now` is a parameter that defaults to the current time, and every function is pure.
+- **Patient-facing output.** Only clinician id and name are returned, not the full record with every appointment and slot.
 
-However, this code should support us having hundreds of clinicians – some who don’t operate in NY or accept Aetna, but others who do.
+## Testing
 
-_Writing tests is optional_
+Unit tests cover each rule's edge cases:
 
-## Task 2: Optimizing which slots we show
+- the 7-calendar-day boundary
+- back-to-back appointments
+- week boundaries
+- which statuses count
+- caps above and below what physically fits
 
-Sometimes our available slots look something like this (i.e., 12pm to 1:30pm at 15 minute intervals):
+End-to-end tests run the instructions' examples, plus mock clinicians that each demonstrate one rule:
 
-```jsx
-"2024-08-19T12:00:00.000Z";
-"2024-08-19T12:15:00.000Z";
-"2024-08-19T12:30:00.000Z";
-"2024-08-19T12:45:00.000Z";
-"2024-08-19T13:00:00.000Z";
-"2024-08-19T13:15:00.000Z";
-"2024-08-19T13:30:00.000Z";
-```
+| Clinician                  | What it shows                                                                                 |
+| -------------------------- | --------------------------------------------------------------------------------------------- |
+| Dr. Jane Doe               | The provided slots (37,165 Task 1 pairs)                                                      |
+| Jon Snow                   | The instructions' 6-slot example; in Task 3, a weekly cap that only allows pairs across weeks |
+| Arya Stark                 | Task 2 removals; in Task 3, overlapping and back-to-back appointments                         |
+| Ron Weasley, Percy Jackson | Task 2 removals; in Task 3, daily caps that let every slot through again                      |
+| Others                     | Excluded for state, insurance or clinician type                                               |
 
-When one of these 90-minute slots is booked, most – or all – of the others are no longer able to be booked because they would overlap with each other.
+## Performance
 
-E.g., if the 12pm slot is booked, then these slots could no longer be booked:
+After the eligibility check, all work depends only on one clinician's own slots and appointments. That makes the per-clinician work straightforward to cache, run in parallel, or recompute when a single clinician's data changes.
 
-```jsx
-"2024-08-19T12:15:00.000Z";
-"2024-08-19T12:30:00.000Z";
-"2024-08-19T12:45:00.000Z";
-"2024-08-19T13:00:00.000Z";
-"2024-08-19T13:15:00.000Z";
-```
+Cost per clinician:
 
-because the 12pm appointment doesn’t end until 1:30pm. Still, this appointment would be bookable:
+| Step                              | Cost                                                         |
+| --------------------------------- | ------------------------------------------------------------ |
+| Filtering slots and counting caps | Linear                                                       |
+| Task 2 optimizer                  | Linear per day                                               |
+| Pairing                           | Proportional to the pairs produced, thanks to the early stop |
 
-```jsx
-"2024-08-19T13:30:00.000Z";
-```
+Task 3 first drops appointments from before the current week, so years of history don't slow it down.
 
-If someone scheduled the 12:15pm slot instead of the 12pm slot, then _all_ other time slots would no longer be available.
+Benchmark: 1,000 clinicians, each with Dr. Doe's 458 slots (and, for Task 3, 2,000+ appointments each). Each task finishes in **~0.2–0.4 s**.
 
-So, we want to a function that filters out slots that reduce the number of appointments that can happen on a given day. So for:
+**The real limit at scale is output size, not CPU.** Dr. Doe alone produces 37,165 Task 1 pairs, so hundreds of clinicians mean millions of pairs. That's the main reason for the API changes below.
 
-```jsx
-"2024-08-19T12:00:00.000Z";
-"2024-08-19T12:15:00.000Z";
-"2024-08-19T12:30:00.000Z";
-"2024-08-19T12:45:00.000Z";
-"2024-08-19T13:00:00.000Z";
-"2024-08-19T13:15:00.000Z";
-"2024-08-19T13:30:00.000Z";
-```
+## Future enhancements
 
-We would only want to keep these 2 datetimes:
+**Product**
 
-```jsx
-"2024-08-19T12:00:00.000Z";
-"2024-08-19T13:30:00.000Z";
-```
+- Clinician and patient timezones. Days, weeks and the "past midnight" assumption all depend on this.
+- A minimum booking lead time and buffers between appointments, if clinicians want them.
+- Therapy intakes: a single 60-minute session through the same pipeline.
+- Ranking clinicians, for example by soonest availability or patient preferences.
+- Coverage rules beyond "accepts this payer in this state", such as payer or age exceptions in specific states.
 
-**Write a function that takes a list of dates, and a duration (like 90 minutes) and filters it to maximize number of possible appointments that can be scheduled.**
+**Scale**
 
-If possible, incorporate this with the code from task 1.
-
-_Writing tests is optional_
-
-## Task 3: Taking clinician capacity into account
-
-Scheduling is going well, and we now have tons of appointments scheduled!
-
-```jsx
-{
-  id: "9c516382-c5b2-4677-a7ac-4e100fa35bdd",
-  firstName: "Jane",
-  lastName: "Doe",
-  states: [UsState.NY, UsState.CA],
-  insurances: [InsurancePayer.Aetna, InsurancePayer.Cigna],
-  clinicianType: ClinicianType.PSYCHOLOGIST,
-  appointments: [
-     // dozens of appointments!
-  ],
-  maxDailyAppointments: 2,
-  maxWeeklyAppointments: 8,
-}
-```
-
-However, we promised Dr. Doe that she would never have more than 2 appointments per day, and never more than 8 appointments per week.
-
-**Update the code from tasks 1 and 2 to take already scheduled appointments,** `maxDailyAppointments`, and `maxWeeklyAppointments` into account when determining which slots we show to patients.
-
-<aside>
-👉
-
-You should optimize for correctness and readability of your app code: the most important thing is that it your code works and is easy (enough) to follow.
-
-In general, I recommend having the minimal possible scaffolding for the project: no need to use an actual database (mocked data is 100% sufficient), no need to setup a server, etc.
-
-The business logic is the main purpose of the challenge 😎
-
-</aside>
+- A two-step API: return first-session options, then fetch second sessions once one is picked. This is a much smaller payload and fewer choices at once for patients.
+- A search horizon (for example, the next 4 weeks) and pagination over ranked clinicians.
+- Precompute availability per clinician and refresh it on booking, cancellation or schedule changes. Cache results per (state, payer, service), since many patients share the same answer.
+- Find eligible clinicians with an indexed database query instead of scanning every clinician.
+- Booking safety: re-check availability and caps inside a transaction, book both sessions together, and hold slots briefly during checkout to prevent double-booking.

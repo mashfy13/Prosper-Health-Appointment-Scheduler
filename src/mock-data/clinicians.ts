@@ -54,7 +54,7 @@ export const jonSnow: Clinician = buildClinician({
 /**
  * Eligible for patient2 (MD + United). Small data set where Task 2 removes
  * slots that would cost an appointment:
- * - 08-20: README example (12:00–13:30 every 15 min) → keeps 12:00, 13:30
+ * - 08-20: instructions' example (12:00–13:30 every 15 min) → keeps 12:00, 13:30
  * - 08-22: 14:00, 14:30, 15:30 → keeps 14:00, 15:30 (14:30 blocks both)
  * - 08-23: 12:00 alone → kept
  *
