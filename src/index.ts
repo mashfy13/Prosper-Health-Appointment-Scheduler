@@ -1,6 +1,7 @@
 import { MOCK_CLINICIANS } from "./mock-data/clinicians";
 import {
   findAssessmentOptions,
+  findAvailableAssessmentOptions,
   findOptimizedAssessmentOptions,
 } from "./scheduling/assessments";
 import {
@@ -22,6 +23,11 @@ const NOW = new Date("2024-08-19T00:00:00.000Z");
 
 const task1Results = findAssessmentOptions(patient, MOCK_CLINICIANS, NOW);
 const task2Results = findOptimizedAssessmentOptions(
+  patient,
+  MOCK_CLINICIANS,
+  NOW,
+);
+const task3Results = findAvailableAssessmentOptions(
   patient,
   MOCK_CLINICIANS,
   NOW,
@@ -61,3 +67,7 @@ console.log(
 
 printResults("Task 1: All assessment options", task1Results);
 printResults("Task 2: Optimized assessment options", task2Results);
+printResults(
+  "Task 3: Available assessment options (appointments + caps)",
+  task3Results,
+);

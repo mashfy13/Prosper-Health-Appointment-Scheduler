@@ -1,7 +1,9 @@
 import { buildClinician, buildSlot } from "../mock-data/factories";
 import {
   MOCK_CLINICIANS,
+  aryaStark,
   janeDoe,
+  jonSnow,
   percyJackson,
   ronWeasley,
 } from "../mock-data/clinicians";
@@ -10,6 +12,7 @@ import { Clinician } from "../starter-code/clinician";
 import {
   buildAssessmentOptions,
   findAssessmentOptions,
+  findAvailableAssessmentOptions,
   findOptimizedAssessmentOptions,
   isValidSessionGap,
 } from "./assessments";
@@ -169,6 +172,164 @@ describe("findOptimizedAssessmentOptions", () => {
     task2Pairs.forEach((pair) =>
       expect(task1Pairs.has(pair.join())).toBe(true),
     );
+  });
+});
+
+describe("findAvailableAssessmentOptions", () => {
+  /** Psychologist for Byrne (NY + Aetna) with 90-minute slots and session 1 appointments. */
+  function bookedPsychologist({
+    slots,
+    appointments = [],
+    maxDaily = 2,
+    maxWeekly = 8,
+  }: {
+    slots: string[];
+    appointments?: string[];
+    maxDaily?: number;
+    maxWeekly?: number;
+  }): Clinician {
+    return buildClinician({
+      id: "booked-psychologist",
+      firstName: "Booked",
+      lastName: "Psychologist",
+      states: ["NY"],
+      insurances: ["AETNA"],
+      clinicianType: "PSYCHOLOGIST",
+      maxDailyAppointments: maxDaily,
+      maxWeeklyAppointments: maxWeekly,
+      slots: slots.map((date) => ({ date, length: 90 })),
+      appointments: appointments.map((date) => ({
+        date,
+        type: "ASSESSMENT_SESSION_1",
+      })),
+    });
+  }
+  const pairsFor = (clinician: Clinician) =>
+    findAvailableAssessmentOptions(patient, [clinician], NOW).flatMap(
+      (result) => toPairs(result.options),
+    );
+
+  it("removes slots on a day that's at its daily cap", () => {
+    const clinician = bookedPsychologist({
+      slots: [
+        "2024-08-20T12:00:00.000Z",
+        "2024-08-21T12:00:00.000Z",
+        "2024-08-22T12:00:00.000Z",
+      ],
+      appointments: ["2024-08-21T08:00:00.000Z", "2024-08-21T15:00:00.000Z"],
+    });
+
+    expect(pairsFor(clinician)).toEqual([
+      ["2024-08-20T12:00:00.000Z", "2024-08-22T12:00:00.000Z"],
+    ]);
+  });
+
+  it("removes slots in a week that's at its weekly cap", () => {
+    // Week of 08-19 is full; 08-26 and 08-27 are in the next week.
+    const clinician = bookedPsychologist({
+      slots: [
+        "2024-08-23T12:00:00.000Z",
+        "2024-08-26T12:00:00.000Z",
+        "2024-08-27T12:00:00.000Z",
+      ],
+      appointments: ["2024-08-19T12:00:00.000Z", "2024-08-20T12:00:00.000Z"],
+      maxWeekly: 2,
+    });
+
+    expect(pairsFor(clinician)).toEqual([
+      ["2024-08-26T12:00:00.000Z", "2024-08-27T12:00:00.000Z"],
+    ]);
+  });
+
+  it("only pairs sessions in the same week if that week has 2 left", () => {
+    const slots = [
+      "2024-08-20T12:00:00.000Z",
+      "2024-08-21T12:00:00.000Z",
+      "2024-08-26T12:00:00.000Z",
+    ];
+    const withWeekLeft = (maxWeekly: number) =>
+      bookedPsychologist({
+        slots,
+        appointments: ["2024-08-19T12:00:00.000Z"],
+        maxWeekly,
+      });
+
+    // 1 left: only pairs across weeks.
+    expect(pairsFor(withWeekLeft(2))).toEqual([
+      ["2024-08-20T12:00:00.000Z", "2024-08-26T12:00:00.000Z"],
+      ["2024-08-21T12:00:00.000Z", "2024-08-26T12:00:00.000Z"],
+    ]);
+    // 2 left: the same-week pair is allowed too.
+    expect(pairsFor(withWeekLeft(3))).toEqual([
+      ["2024-08-20T12:00:00.000Z", "2024-08-21T12:00:00.000Z"],
+      ["2024-08-20T12:00:00.000Z", "2024-08-26T12:00:00.000Z"],
+      ["2024-08-21T12:00:00.000Z", "2024-08-26T12:00:00.000Z"],
+    ]);
+  });
+
+  it("offers Dr. Doe's 09-02 12:45 and 21:15, since her daily cap is 2", () => {
+    const [doe] = findAvailableAssessmentOptions(patient, [janeDoe], NOW);
+    const firstSessions = new Set(
+      doe.options.map((option) => option.firstSession.date.toISOString()),
+    );
+
+    expect(firstSessions.has("2024-09-02T12:45:00.000Z")).toBe(true);
+    expect(firstSessions.has("2024-09-02T21:15:00.000Z")).toBe(true);
+  });
+
+  describe("patient2's clinicians", () => {
+    const resultFor = (clinician: Clinician) =>
+      findAvailableAssessmentOptions(patient2, [clinician], NOW).flatMap(
+        (result) => toPairs(result.options),
+      );
+
+    it("Jon Snow: weekly cap leaves only pairs into the next week", () => {
+      expect(resultFor(jonSnow)).toEqual([
+        ["2024-08-21T12:00:00.000Z", "2024-08-28T12:15:00.000Z"],
+        ["2024-08-21T15:00:00.000Z", "2024-08-28T12:15:00.000Z"],
+        ["2024-08-22T15:00:00.000Z", "2024-08-28T12:15:00.000Z"],
+      ]);
+    });
+
+    it("Arya Stark: conflicts remove 08-22; back-to-back and rescheduled don't", () => {
+      expect(resultFor(aryaStark)).toEqual([
+        ["2024-08-20T12:00:00.000Z", "2024-08-23T12:00:00.000Z"],
+        ["2024-08-20T13:30:00.000Z", "2024-08-23T12:00:00.000Z"],
+      ]);
+    });
+
+    it("Ron Weasley and Percy Jackson: daily caps keep every slot", () => {
+      const firstSessionCounts = findAvailableAssessmentOptions(
+        patient2,
+        [ronWeasley, percyJackson],
+        NOW,
+      ).map(({ clinician, options }) => [clinician.id, options.length]);
+
+      // Task 2 offered 6 and 11.
+      expect(firstSessionCounts).toEqual([
+        [ronWeasley.id, 9],
+        [percyJackson.id, 22],
+      ]);
+    });
+  });
+
+  it("only offers pairs that Task 1 also offers", () => {
+    for (const currentPatient of [patient, patient2]) {
+      const task1Pairs = new Set(
+        findAssessmentOptions(currentPatient, MOCK_CLINICIANS, NOW).flatMap(
+          (result) => toPairs(result.options).map((pair) => pair.join()),
+        ),
+      );
+      const task3Pairs = findAvailableAssessmentOptions(
+        currentPatient,
+        MOCK_CLINICIANS,
+        NOW,
+      ).flatMap((result) => toPairs(result.options));
+
+      task3Pairs.forEach((pair) =>
+        expect(task1Pairs.has(pair.join())).toBe(true),
+      );
+    }
   });
 });
 

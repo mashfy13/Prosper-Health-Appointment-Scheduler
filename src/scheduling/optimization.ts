@@ -58,32 +58,44 @@ function latestSchedule(
  * Every date in *some* maximum schedule is kept, not just one schedule, so
  * patients see more choices (DECISIONS.md D17).
  *
- * Both schedules hold the maximum number of appointments. The k-th appointment
- * of *any* maximum schedule starts between the k-th earliest and the k-th
- * latest start, so a date is kept if it falls inside one of those windows.
+ * A date is kept if booking it still lets the day reach its target:
+ *   (most that fit before it) + 1 + (most that fit after it) >= target
+ * The earliest schedule packs appointments as early as possible, so the most
+ * that fit before a date is how many of them end by its start. The latest
+ * schedule gives the most that fit after it the same way.
+ *
+ * The target is the most that physically fit, capped by `maxAppointments`
+ * (Task 3: the clinician's remaining daily/weekly capacity). There's no reason
+ * to hide a slot to protect room the clinician can't use (DECISIONS.md D18).
  *
  * E.g. Dr. Doe on 2024-09-02 (90 minutes):
- *   earliest: 12:00  13:30  15:00  21:00  22:30
+ *   earliest: 12:00  13:30  15:00  21:00  22:30   (5 fit)
  *   latest:   12:30  14:00  15:30  21:00  22:30
- *   kept:     12:00–12:30, 13:30–14:00, 15:00–15:30, 21:00, 22:30
- *   12:45 falls in no window: booking it leaves room for only 4 appointments.
- *
- * Returns the input `Date` objects in input order.
+ *   12:45: 0 before + 1 + 3 after (15:30, 21:00, 22:30) = 4
+ *   → removed with no cap (4 < 5), kept with a cap of 2 (4 >= 2).
  */
 export function maximizeAppointmentDates(
   slotDates: Date[],
   durationMinutes: number,
+  maxAppointments: number = Infinity,
 ): Date[] {
+  if (maxAppointments <= 0) return [];
+
   const durationMs = durationMinutes * MS_PER_MINUTE;
   const slotTimes = slotDates.map((date) => date.getTime()).sort((a, b) => a - b);
   const earliest = earliestSchedule(slotTimes, durationMs);
   const latest = latestSchedule(slotTimes, durationMs);
+  const target = Math.min(maxAppointments, earliest.length);
 
   return slotDates.filter((date) => {
     const currentStart = date.getTime();
-    return earliest.some(
-      (earliestStart, k) => earliestStart <= currentStart && currentStart <= latest[k],
-    );
+    const fitBefore = earliest.filter(
+      (start) => start + durationMs <= currentStart,
+    ).length;
+    const fitAfter = latest.filter(
+      (start) => start >= currentStart + durationMs,
+    ).length;
+    return fitBefore + 1 + fitAfter >= target;
   });
 }
 
@@ -94,11 +106,15 @@ export function maximizeAppointmentDates(
  * to get all bookable slots that wouldn't reduce the maxnimum number slots
  * if booked. 
  * 
- * Filters the original slots down to the slots in that "maximum" set. 
+ * Filters the original slots down to the slots in that "maximum" set.
+ *
+ * `maxAppointmentsOn(date)` caps each day's target (Task 3: remaining
+ * capacity for that date's day and week). No cap by default.
  */
 export function optimizeSlots(
   slots: AvailableAppointmentSlot[],
   durationMinutes: number,
+  maxAppointmentsOn: (date: Date) => number = () => Infinity,
 ): AvailableAppointmentSlot[] {
   const slotDatesByDay = new Map<number, Date[]>();
   for (const slot of slots) {
@@ -110,7 +126,12 @@ export function optimizeSlots(
 
   const keptSlotTimes = new Set<number>();
   for (const datesForDay of slotDatesByDay.values()) {
-    for (const date of maximizeAppointmentDates(datesForDay, durationMinutes)) {
+    const maxAppointments = maxAppointmentsOn(datesForDay[0]);
+    for (const date of maximizeAppointmentDates(
+      datesForDay,
+      durationMinutes,
+      maxAppointments,
+    )) {
       keptSlotTimes.add(date.getTime());
     }
   }

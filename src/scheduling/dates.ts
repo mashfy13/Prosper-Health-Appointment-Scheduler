@@ -16,3 +16,12 @@ export function utcDayNumber(date: Date): number {
 export function calendarDaysBetween(from: Date, to: Date): number {
   return utcDayNumber(to) - utcDayNumber(from);
 }
+
+/**
+ * Monday-start week of a date in UTC (DECISIONS.md D12), as a week count.
+ * Day 0 (1970-01-01) was a Thursday, so shifting by 3 days makes each week
+ * start on a Monday.
+ */
+export function utcWeekNumber(date: Date): number {
+  return Math.floor((utcDayNumber(date) + 3) / 7);
+}

@@ -9,22 +9,38 @@ import { buildClinician } from "./factories";
 */
 export const janeDoe: Clinician = buildClinician({
   ...starterJaneDoe,
+  appointments: [],
   slots: MOCK_SLOT_DATA,
 });
 
-/** 
- * Small example data set from the instructions document 
+/**
+ * Small example data set from the instructions document
  * Eligible for patient2
+ *
+ * Task 3 (weekly cap): 3 counted appointments in the week of 08-19 leave 1 of
+ * 4, so pairs within that week are dropped. Only pairs into 08-28 remain:
+ * 08-21 12:00, 08-21 15:00, 08-22 15:00 → 08-28 12:15. The cancelled
+ * appointment doesn't count.
  */
 export const jonSnow: Clinician = buildClinician({
-  id: "clinician-jon-snow", 
+  id: "clinician-jon-snow",
   firstName: "Jon",
   lastName: "Snow",
   states: ["MD"],
   insurances: ["AETNA", "UNITED"],
   clinicianType: "PSYCHOLOGIST",
   maxDailyAppointments: 3,
-  maxWeeklyAppointments: 9,
+  maxWeeklyAppointments: 4,
+  appointments: [
+    { date: "2024-08-20T14:00:00.000Z", type: "ASSESSMENT_SESSION_1" },
+    {
+      date: "2024-08-21T09:00:00.000Z",
+      type: "ASSESSMENT_SESSION_1",
+      status: "CANCELLED",
+    },
+    { date: "2024-08-23T14:00:00.000Z", type: "ASSESSMENT_SESSION_2" },
+    { date: "2024-08-23T16:00:00.000Z", type: "ASSESSMENT_SESSION_1" },
+  ],
   slots: [
     { date: "2024-08-19T12:00:00.000Z", length: 90 },
     { date: "2024-08-19T12:15:00.000Z", length: 90 },
@@ -41,6 +57,11 @@ export const jonSnow: Clinician = buildClinician({
  * - 08-20: README example (12:00–13:30 every 15 min) → keeps 12:00, 13:30
  * - 08-22: 14:00, 14:30, 15:30 → keeps 14:00, 15:30 (14:30 blocks both)
  * - 08-23: 12:00 alone → kept
+ *
+ * Task 3 (conflicts): the 08-22 14:15–15:45 appointment overlaps every 08-22
+ * slot. The 08-23 10:30 appointment ends as 12:00 starts (back-to-back, kept),
+ * and the rescheduled one doesn't block 12:00. Leaves 08-20 12:00 and 13:30
+ * → 08-23 12:00.
  */
 export const aryaStark: Clinician = buildClinician({
   id: "clinician-arya-stark",
@@ -51,6 +72,15 @@ export const aryaStark: Clinician = buildClinician({
   clinicianType: "PSYCHOLOGIST",
   maxDailyAppointments: 3,
   maxWeeklyAppointments: 10,
+  appointments: [
+    { date: "2024-08-22T14:15:00.000Z", type: "ASSESSMENT_SESSION_1" },
+    { date: "2024-08-23T10:30:00.000Z", type: "ASSESSMENT_SESSION_2" },
+    {
+      date: "2024-08-23T12:00:00.000Z",
+      type: "ASSESSMENT_SESSION_1",
+      status: "RE_SCHEDULED",
+    },
+  ],
   slots: [
     { date: "2024-08-20T12:00:00.000Z", length: 90 },
     { date: "2024-08-20T12:15:00.000Z", length: 90 },
@@ -73,6 +103,9 @@ export const aryaStark: Clinician = buildClinician({
  * Expected kept slots from Task 2 optimization: 
  *  12:00, 12:15, 12:30
  *  13:30, 13:45, 14:00
+ *
+ * Task 3 (daily cap): 3 appointments on 08-20 leave 1 of 4, so only one more
+ * booking fits that day and all 9 slots are offered.
  */
 export const ronWeasley: Clinician = buildClinician({
   id: "clinician-ron-weasley",
@@ -83,6 +116,11 @@ export const ronWeasley: Clinician = buildClinician({
   clinicianType: "PSYCHOLOGIST",
   maxDailyAppointments: 4,
   maxWeeklyAppointments: 12,
+  appointments: [
+    { date: "2024-08-20T08:00:00.000Z", type: "ASSESSMENT_SESSION_1" },
+    { date: "2024-08-20T09:30:00.000Z", type: "ASSESSMENT_SESSION_2" },
+    { date: "2024-08-20T16:00:00.000Z", type: "ASSESSMENT_SESSION_1" },
+  ],
   slots: [
     { date: "2024-08-20T12:00:00.000Z", length: 90 },
     { date: "2024-08-20T12:15:00.000Z", length: 90 },
@@ -106,7 +144,10 @@ export const ronWeasley: Clinician = buildClinician({
  *  13:30, 13:45, 14:00 
  *  15:00, 15:15, 15:30
  *  21:00
- *  22:30 
+ *  22:30
+ *
+ * Task 3 (daily cap, no appointments): only 3 a day of the 5 that fit on
+ * 09-02, so all 22 slots are offered.
  */
 export const percyJackson: Clinician = buildClinician({
   id: "clinician-percy-jackson",
