@@ -164,15 +164,21 @@ function findOptionsByClinician(
   const results: ClinicianAssessmentOptions[] = [];
 
   for (const clinician of clinicians) {
+    // Exclude clinicians that are ineligible for the patient
     if (!isEligibleClinician(clinician, patient, ASSESSMENT.clinicianType)) {
       continue;
     }
 
+    // First pass over clinician's available slots to only include slots that are
+    // in the future and meet the session length requirement 
     let slots = getEligibleSlots(
       clinician,
       ASSESSMENT.sessionLengthMinutes,
       now,
     );
+    
+    // If capacity rule is not being applied, only the valid gap rule needs to 
+    // be checked 
     let isValidPair: SessionPairPredicate = isValidSessionGap;
     let maxAppointmentsOn: (date: Date) => number = () => Infinity;
 
