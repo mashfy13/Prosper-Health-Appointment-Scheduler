@@ -411,6 +411,23 @@ describe("buildAssessmentOptions", () => {
     expect(options[0].secondSessionOptions).toEqual([slots[1]]);
   });
 
+  it("pairs slots 1 to 7 calendar days apart, including several per day", () => {
+    const slots = [
+      "2024-08-20T09:00:00.000Z", // first session
+      "2024-08-20T15:00:00.000Z", // same day
+      "2024-08-21T09:00:00.000Z", // +1 day
+      "2024-08-21T15:00:00.000Z", // +1 day
+      "2024-08-27T09:00:00.000Z", // +7 days
+      "2024-08-27T23:45:00.000Z", // +7 days
+      "2024-08-28T00:00:00.000Z", // +8 days
+    ].map((date) => buildSlot("c", date, 90));
+
+    const [first] = buildAssessmentOptions(slots);
+
+    expect(first.firstSession).toBe(slots[0]);
+    expect(first.secondSessionOptions).toEqual(slots.slice(2, 6));
+  });
+
   it("uses a custom pair rule when given one", () => {
     const slots = ["2024-08-20T12:00:00.000Z", "2024-08-21T12:00:00.000Z"].map(
       (date) => buildSlot("c", date, 90),

@@ -5,7 +5,7 @@ import {
   AvailableAppointmentSlot,
 } from "../starter-code/appointment";
 import { Clinician } from "../starter-code/clinician";
-import { utcDayNumber, utcWeekNumber } from "./dates";
+import { startOfUtcWeek, utcDayNumber, utcWeekNumber } from "./dates";
 
 const MS_PER_MINUTE = 60 * 1000;
 
@@ -32,6 +32,30 @@ function isCountedAppointment(appointment: Appointment): boolean {
   return COUNTED_STATUSES.includes(appointment.status);
 }
 
+function appointmentEndTime(appointment: Appointment): number {
+  return (
+    appointment.scheduledFor.getTime() +
+    APPOINTMENT_DURATION_MINUTES[appointment.appointmentType] * MS_PER_MINUTE
+  );
+}
+
+/**
+ * Only the appointments that can affect slots offered after `now`: those
+ * from the start of the current week onward. Earlier ones can't count toward
+ * this or a later week's cap, or overlap a future slot (assuming no appointment 
+ * runs past midnight). Keeps the rest of Task 3 fast no matter how much history 
+ * a clinician has. In production this would be the database query.
+ */
+export function getRelevantAppointments(
+  appointments: Appointment[],
+  now: Date,
+): Appointment[] {
+  const weekStart = startOfUtcWeek(now);
+  return appointments.filter(
+    (appointment) => appointment.scheduledFor >= weekStart,
+  );
+}
+
 /** How many more appointments the clinician can take on a date's day / week. */
 export interface RemainingCapacity {
   onDay: (date: Date) => number;
@@ -51,11 +75,13 @@ export interface RemainingCapacity {
  * too (e.g. Monday's toward Wednesday's week). Never below 0, even if the
  * clinician is already over a cap.
  */
-export function getRemainingCapacity(clinician: Clinician): RemainingCapacity {
+export function getRemainingCapacity(
+  clinician: Clinician,
+  appointments: Appointment[],
+): RemainingCapacity {
   const bookedByDay = new Map<number, number>();
   const bookedByWeek = new Map<number, number>();
-  const countedAppointments =
-    clinician.appointments.filter(isCountedAppointment);
+  const countedAppointments = appointments.filter(isCountedAppointment);
   for (const appointment of countedAppointments) {
     const day = utcDayNumber(appointment.scheduledFor);
     const week = utcWeekNumber(appointment.scheduledFor);
@@ -91,9 +117,12 @@ export function getRemainingCapacity(clinician: Clinician): RemainingCapacity {
  * Removes slots that overlap a counted appointment (DECISIONS.md D15).
  * Back-to-back (one ends exactly when the other starts) isn't an overlap.
  *
- * Future work: checks every slot against every appointment. Sorting both and
- * sweeping once would be O(slots + appointments) if clinicians carry long
- * appointment histories.
+ * Checks every slot against every appointment. That stays small because
+ * history is filtered out first (`getRelevantAppointments`) and future
+ * appointments are bounded by the weekly cap.
+ *
+ * Future work: sorting both and sweeping once would be O(slots +
+ * appointments), if a clinician ever had far more future appointments.
  */
 export function removeConflictingSlots(
   slots: AvailableAppointmentSlot[],
@@ -101,16 +130,10 @@ export function removeConflictingSlots(
 ): AvailableAppointmentSlot[] {
   const blockedTimes = appointments
     .filter(isCountedAppointment)
-    .map((appointment) => {
-      const start = appointment.scheduledFor.getTime();
-      return {
-        start,
-        end:
-          start +
-          APPOINTMENT_DURATION_MINUTES[appointment.appointmentType] *
-            MS_PER_MINUTE,
-      };
-    });
+    .map((appointment) => ({
+      start: appointment.scheduledFor.getTime(),
+      end: appointmentEndTime(appointment),
+    }));
 
   return slots.filter((slot) => {
     const start = slot.date.getTime();

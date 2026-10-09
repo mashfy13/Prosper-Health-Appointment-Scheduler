@@ -19,6 +19,12 @@ export function utcDayNumber(date: Date): number {
   return Math.floor((utcDayNumber(date) + 3) / 7);
 }
 
+/** Midnight UTC on the Monday that starts a date's week. */
+export function startOfUtcWeek(date: Date): Date {
+  const mondayDayNumber = utcWeekNumber(date) * 7 - 3;
+  return new Date(mondayDayNumber * MS_PER_DAY);
+}
+
 /**
  * Calendar days from `from` to `to` in UTC, ignoring time of day.
  * E.g. 23:00 on Monday → 00:30 on Tuesday is 1 day; 12:00 → 12:15 seven days
