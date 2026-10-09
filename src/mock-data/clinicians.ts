@@ -185,6 +185,66 @@ export const percyJackson: Clinician = buildClinician({
   ],
 });
 
+/**
+ * Eligible for patient2 (MD + United). Small data set where Task 3 removes a
+ * fully booked day.
+ *
+ * Task 3 (daily cap): 2 appointments on 08-21 reach the daily cap of 2, so
+ * its 12:00 slot is removed. Of the 3 pairs from Tasks 1 and 2, only
+ * 08-20 12:00 → 08-22 12:00 remains.
+ */
+export const jeanGrey: Clinician = buildClinician({
+  id: "clinician-jean-grey",
+  firstName: "Jean",
+  lastName: "Grey",
+  states: ["MD"],
+  insurances: ["UNITED"],
+  clinicianType: "PSYCHOLOGIST",
+  maxDailyAppointments: 2,
+  maxWeeklyAppointments: 10,
+  appointments: [
+    { date: "2024-08-21T09:00:00.000Z", type: "ASSESSMENT_SESSION_1" },
+    { date: "2024-08-21T15:00:00.000Z", type: "ASSESSMENT_SESSION_2" },
+  ],
+  slots: [
+    { date: "2024-08-20T12:00:00.000Z", length: 90 },
+    { date: "2024-08-21T12:00:00.000Z", length: 90 },
+    { date: "2024-08-22T12:00:00.000Z", length: 90 },
+  ],
+});
+
+/**
+ * Eligible for patient2 (MD + United). Small data set where Task 3 removes a
+ * fully booked week.
+ *
+ * Task 3 (weekly cap): 3 appointments in the week of 08-19 reach the weekly
+ * cap of 3, so the 08-23 slot is removed. The week of 08-26 has all 3 left,
+ * so pairs within it are still allowed (unlike Jon Snow's week). Of the 6
+ * pairs from Tasks 1 and 2, only 08-26 → 08-27, 08-26 → 08-28 and
+ * 08-27 → 08-28 remain.
+ */
+export const peterParker: Clinician = buildClinician({
+  id: "clinician-peter-parker",
+  firstName: "Peter",
+  lastName: "Parker",
+  states: ["MD", "VA"],
+  insurances: ["UNITED", "AETNA"],
+  clinicianType: "PSYCHOLOGIST",
+  maxDailyAppointments: 3,
+  maxWeeklyAppointments: 3,
+  appointments: [
+    { date: "2024-08-20T09:00:00.000Z", type: "ASSESSMENT_SESSION_1" },
+    { date: "2024-08-21T09:00:00.000Z", type: "ASSESSMENT_SESSION_2" },
+    { date: "2024-08-22T09:00:00.000Z", type: "ASSESSMENT_SESSION_1" },
+  ],
+  slots: [
+    { date: "2024-08-23T12:00:00.000Z", length: 90 },
+    { date: "2024-08-26T12:00:00.000Z", length: 90 },
+    { date: "2024-08-27T12:00:00.000Z", length: 90 },
+    { date: "2024-08-28T12:00:00.000Z", length: 90 },
+  ],
+});
+
 /** Eligible for Byrne (NY + Aetna). */
 export const alexRivera: Clinician = buildClinician({
   id: "clinician-alex-rivera",
@@ -256,6 +316,8 @@ export const MOCK_CLINICIANS: Clinician[] = [
   aryaStark,
   ronWeasley,
   percyJackson,
+  jeanGrey,
+  peterParker,
   alexRivera,
   samPatel,
   morganLee,
