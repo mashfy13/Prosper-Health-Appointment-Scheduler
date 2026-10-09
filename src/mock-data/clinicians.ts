@@ -15,7 +15,7 @@ export const janeDoe: Clinician = buildClinician({
 /** 
  * Small example data set from the instructions document 
  * Eligible for patient2
- * */
+ */
 export const jonSnow: Clinician = buildClinician({
   id: "clinician-jon-snow", 
   firstName: "Jon",
