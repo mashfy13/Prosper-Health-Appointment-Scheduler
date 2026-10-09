@@ -12,7 +12,10 @@ export const janeDoe: Clinician = buildClinician({
   slots: MOCK_SLOT_DATA,
 });
 
-/** Small example data set from the instructions document */
+/** 
+ * Small example data set from the instructions document 
+ * Eligible for patient2
+ * */
 export const jonSnow: Clinician = buildClinician({
   id: "clinician-jon-snow", 
   firstName: "Jon",
@@ -29,6 +32,37 @@ export const jonSnow: Clinician = buildClinician({
     { date: "2024-08-21T15:00:00.000Z", length: 90 },
     { date: "2024-08-22T15:00:00.000Z", length: 90 },
     { date: "2024-08-28T12:15:00.000Z", length: 90 },
+  ],
+});
+
+/**
+ * Eligible for patient2 (MD + United). Small data set where Task 2 removes
+ * slots that would cost an appointment:
+ * - 08-20: README example (12:00–13:30 every 15 min) → keeps 12:00, 13:30
+ * - 08-22: 14:00, 14:30, 15:30 → keeps 14:00, 15:30 (14:30 blocks both)
+ * - 08-23: 12:00 alone → kept
+ */
+export const aryaStark: Clinician = buildClinician({
+  id: "clinician-arya-stark",
+  firstName: "Arya",
+  lastName: "Stark",
+  states: ["MD", "VA"],
+  insurances: ["UNITED"],
+  clinicianType: "PSYCHOLOGIST",
+  maxDailyAppointments: 3,
+  maxWeeklyAppointments: 10,
+  slots: [
+    { date: "2024-08-20T12:00:00.000Z", length: 90 },
+    { date: "2024-08-20T12:15:00.000Z", length: 90 },
+    { date: "2024-08-20T12:30:00.000Z", length: 90 },
+    { date: "2024-08-20T12:45:00.000Z", length: 90 },
+    { date: "2024-08-20T13:00:00.000Z", length: 90 },
+    { date: "2024-08-20T13:15:00.000Z", length: 90 },
+    { date: "2024-08-20T13:30:00.000Z", length: 90 },
+    { date: "2024-08-22T14:00:00.000Z", length: 90 },
+    { date: "2024-08-22T14:30:00.000Z", length: 90 },
+    { date: "2024-08-22T15:30:00.000Z", length: 90 },
+    { date: "2024-08-23T12:00:00.000Z", length: 90 },
   ],
 });
 
@@ -100,6 +134,7 @@ export const taylorKim: Clinician = buildClinician({
 export const MOCK_CLINICIANS: Clinician[] = [
   janeDoe,
   jonSnow,
+  aryaStark,
   alexRivera,
   samPatel,
   morganLee,

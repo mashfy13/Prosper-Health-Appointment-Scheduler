@@ -5,6 +5,7 @@ import { Clinician } from "../starter-code/clinician";
 import {
   buildAssessmentOptions,
   findAssessmentOptions,
+  findOptimizedAssessmentOptions,
   getCandidateSlots,
   isValidSessionGap,
 } from "./assessments";
@@ -103,6 +104,44 @@ describe("findAssessmentOptions", () => {
     ]);
 
     expect(findAssessmentOptions(patient, [sameDayOnly], NOW)).toEqual([]);
+  });
+});
+
+describe("findOptimizedAssessmentOptions", () => {
+  const offeredDates = (options: AssessmentOption[]) =>
+    new Set(toPairs(options).flatMap(([first, second]) => [first, second]));
+
+  it("returns the same clinicians as Task 1", () => {
+    const ids = (results: { clinician: { id: string } }[]) =>
+      results.map((result) => result.clinician.id);
+
+    expect(
+      ids(findOptimizedAssessmentOptions(patient, MOCK_CLINICIANS, NOW)),
+    ).toEqual(ids(findAssessmentOptions(patient, MOCK_CLINICIANS, NOW)));
+  });
+
+  it("only offers slots that don't reduce a day's maximum", () => {
+    const [doe] = findOptimizedAssessmentOptions(patient, [janeDoe], NOW);
+    const offered = offeredDates(doe.options);
+
+    // On 2024-09-02, 12:45 and 21:15 each cost Dr. Doe an appointment.
+    expect(offered.has("2024-09-02T12:30:00.000Z")).toBe(true);
+    expect(offered.has("2024-09-02T12:45:00.000Z")).toBe(false);
+    expect(offered.has("2024-09-02T21:15:00.000Z")).toBe(false);
+  });
+
+  it("offers a subset of Task 1's pairs", () => {
+    const [task1] = findAssessmentOptions(patient, [janeDoe], NOW);
+    const [task2] = findOptimizedAssessmentOptions(patient, [janeDoe], NOW);
+    const task1Pairs = new Set(
+      toPairs(task1.options).map((pair) => pair.join()),
+    );
+    const task2Pairs = toPairs(task2.options);
+
+    expect(task2Pairs.length).toBeLessThan(task1Pairs.size);
+    task2Pairs.forEach((pair) =>
+      expect(task1Pairs.has(pair.join())).toBe(true),
+    );
   });
 });
 
