@@ -9,6 +9,17 @@ export function utcDayNumber(date: Date): number {
 }
 
 /**
+ * Helper to get the calendar week (Monday-Sunday) of a date as a number of weeks
+ * Used to help with weekly limit considerations.
+ * 
+ * Day 0 (1970-01-01) was a Thursday, so shifting by 3 days makes each week
+ * start on a Monday.
+ */
+ export function utcWeekNumber(date: Date): number {
+  return Math.floor((utcDayNumber(date) + 3) / 7);
+}
+
+/**
  * Calendar days from `from` to `to` in UTC, ignoring time of day.
  * E.g. 23:00 on Monday → 00:30 on Tuesday is 1 day; 12:00 → 12:15 seven days
  * later is 7 days (not 7 days and 15 minutes).

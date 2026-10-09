@@ -104,6 +104,49 @@ describe("maximizeAppointmentDates", () => {
   });
 });
 
+describe("maximizeAppointmentDates with a cap (maxAppointments)", () => {
+  it("keeps more dates when the cap is below what physically fits", () => {
+    // Dr. Doe on 2024-09-02: 5 fit, but with a cap of 2 every slot still
+    // leaves room for 2, so 12:45 and 21:15 are kept too.
+    const day = "2024-09-02";
+    const dates = janeDoe.availableSlots
+      .map((slot) => slot.date)
+      .filter((date) => date.toISOString().startsWith(day));
+
+    expect(maximizeAppointmentDates(dates, 90, 2)).toEqual(dates);
+  });
+
+  it("keeps every date when only 1 more appointment can be booked", () => {
+    const dates = toDates(README_DATES);
+
+    expect(maximizeAppointmentDates(dates, 90, 1)).toEqual(dates);
+  });
+
+  it("still removes dates that would drop the day below its cap", () => {
+    // 3 fit (12:00, 13:30, 15:00). 12:45 leaves room for 2 in total.
+    const dates = toDates([at("12:00"), at("12:45"), at("13:30"), at("15:00")]);
+
+    expect(toIso(maximizeAppointmentDates(dates, 90, 3))).toEqual([
+      at("12:00"),
+      at("13:30"),
+      at("15:00"),
+    ]);
+    expect(maximizeAppointmentDates(dates, 90, 2)).toEqual(dates);
+  });
+
+  it("matches no cap when the cap is at or above what fits", () => {
+    const dates = toDates(README_DATES);
+    const uncapped = maximizeAppointmentDates(dates, 90);
+
+    expect(maximizeAppointmentDates(dates, 90, 2)).toEqual(uncapped);
+    expect(maximizeAppointmentDates(dates, 90, 5)).toEqual(uncapped);
+  });
+
+  it("keeps nothing with a cap of 0", () => {
+    expect(maximizeAppointmentDates(toDates(README_DATES), 90, 0)).toEqual([]);
+  });
+});
+
 describe("optimizeSlots", () => {
   const keptTimes = (slots: { date: Date }[]) =>
     slots.map((slot) => slot.date.toISOString());
@@ -173,5 +216,23 @@ describe("optimizeSlots", () => {
 
     expect(kept).toEqual([slots[0], slots[1], slots[4]]);
     expect(kept[0]).not.toBe(kept[1]);
+  });
+
+  it("applies each day's cap from maxAppointmentsOn", () => {
+    // 08-19 can take 1 more (keeps all 7); 08-20 has no cap (keeps 2).
+    const slots = [
+      ...README_DATES,
+      ...README_DATES.map((date) => date.replace("2024-08-19", "2024-08-20")),
+    ].map((date) => buildSlot("c", date, 90));
+
+    const kept = optimizeSlots(slots, 90, (date) =>
+      date.toISOString().startsWith("2024-08-19") ? 1 : Infinity,
+    );
+
+    expect(keptTimes(kept)).toEqual([
+      ...README_DATES,
+      at("12:00", "2024-08-20"),
+      at("13:30", "2024-08-20"),
+    ]);
   });
 });
