@@ -80,6 +80,30 @@ describe("getRemainingCapacity", () => {
   });
 });
 
+describe("remainingOn and hasRoomForBoth", () => {
+  // Daily cap 2, weekly cap 3. One appointment on Mon 08-19 and one on Wed 08-21.
+  const capacity = getRemainingCapacity(
+    psychologistWith([
+      { date: "2024-08-19T09:00:00.000Z" },
+      { date: "2024-08-21T09:00:00.000Z" },
+    ]),
+  );
+
+  it("remainingOn is the smaller of the day's and week's remaining capacity", () => {
+    // Tuesday: 2 left that day, but only 1 left that week.
+    expect(capacity.remainingOn(new Date("2024-08-20T12:00:00.000Z"))).toBe(1);
+  });
+
+  it("hasRoomForBoth needs 2 left when both dates are in the same week", () => {
+    const tuesday = new Date("2024-08-20T12:00:00.000Z");
+    const thursday = new Date("2024-08-22T12:00:00.000Z");
+    const nextMonday = new Date("2024-08-26T12:00:00.000Z");
+
+    expect(capacity.hasRoomForBoth(tuesday, thursday)).toBe(false);
+    expect(capacity.hasRoomForBoth(tuesday, nextMonday)).toBe(true);
+  });
+});
+
 describe("removeConflictingSlots", () => {
   const slotsAt = (times: string[]) =>
     times.map((time) => buildSlot("c", `2024-08-21T${time}:00.000Z`, 90));
